@@ -23,6 +23,7 @@ const NuevoCicloPage = () => {
   const [formData, setFormData] = useState({
     fechaCruce: new Date().toISOString().split('T')[0],
     tipoCruce: 'monta_natural' as TipoCruce,
+    numeroVerraco: '',
     intento: 1,
     observaciones: '',
   });
@@ -53,6 +54,7 @@ const NuevoCicloPage = () => {
       const nuevoCiclo = iniciarCiclo(madreId!, {
         fechaCruce: formData.fechaCruce,
         tipoCruce: formData.tipoCruce,
+        numeroVerraco: formData.numeroVerraco.trim() || undefined,
         intento: formData.intento,
         observaciones: formData.observaciones.trim() || undefined,
       });
@@ -66,15 +68,13 @@ const NuevoCicloPage = () => {
     }
   };
 
+  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setFormData(prev => ({ ...prev, [field]: e.target.value }));
+
   return (
     <PageLayout>
       <div className="p-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="mb-4"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Volver
         </Button>
@@ -82,24 +82,20 @@ const NuevoCicloPage = () => {
         <Card>
           <CardHeader>
             <CardTitle>Nuevo Ciclo - {madre.arete}</CardTitle>
-            <CardDescription>
-              Este será el ciclo #{ciclosAnteriores.length + 1}
-            </CardDescription>
+            <CardDescription>Este será el ciclo #{ciclosAnteriores.length + 1}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Fecha de cruce */}
               <div className="space-y-2">
-                <Label htmlFor="fechaCruce">Fecha de Cruce *</Label>
+                <Label htmlFor="fechaCruce">Fecha de Cruce / Monta *</Label>
                 <Input
                   id="fechaCruce"
                   type="date"
                   value={formData.fechaCruce}
-                  onChange={(e) => setFormData(prev => ({ ...prev, fechaCruce: e.target.value }))}
+                  onChange={set('fechaCruce')}
                 />
               </div>
 
-              {/* Tipo de cruce */}
               <div className="space-y-3">
                 <Label>Tipo de Cruce</Label>
                 <RadioGroup
@@ -124,7 +120,16 @@ const NuevoCicloPage = () => {
                 </RadioGroup>
               </div>
 
-              {/* Intento */}
+              <div className="space-y-2">
+                <Label htmlFor="numeroVerraco">N° de Verraco</Label>
+                <Input
+                  id="numeroVerraco"
+                  placeholder="Ej: V-003"
+                  value={formData.numeroVerraco}
+                  onChange={set('numeroVerraco')}
+                />
+              </div>
+
               <div className="space-y-3">
                 <Label>Número de Intento</Label>
                 <div className="flex gap-2">
@@ -142,23 +147,18 @@ const NuevoCicloPage = () => {
                 </div>
               </div>
 
-              {/* Observaciones */}
               <div className="space-y-2">
                 <Label htmlFor="observaciones">Observaciones</Label>
                 <Textarea
                   id="observaciones"
                   placeholder="Notas sobre el cruce..."
                   value={formData.observaciones}
-                  onChange={(e) => setFormData(prev => ({ ...prev, observaciones: e.target.value }))}
+                  onChange={set('observaciones')}
                   rows={3}
                 />
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full h-12 text-lg"
-                disabled={isSubmitting}
-              >
+              <Button type="submit" className="w-full h-12 text-lg" disabled={isSubmitting}>
                 <Check className="h-5 w-5 mr-2" />
                 {isSubmitting ? 'Guardando...' : 'Iniciar Ciclo'}
               </Button>

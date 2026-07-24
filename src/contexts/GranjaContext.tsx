@@ -36,18 +36,25 @@ const STORAGE_KEYS = {
   ALERTAS: 'granja_alertas',
 };
 
-// Días de gestación en cerdas (aproximado)
-const DIAS_GESTACION = 114;
-const DIAS_LACTANCIA = 21;
-
 function generarId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-function calcularFechaPartoPrevista(fechaCruce: string): string {
-  const fecha = new Date(fechaCruce);
-  fecha.setDate(fecha.getDate() + DIAS_GESTACION);
-  return fecha.toISOString().split('T')[0];
+function sumarDias(fecha: string, dias: number): string {
+  const d = new Date(fecha);
+  d.setDate(d.getDate() + dias);
+  return d.toISOString().split('T')[0];
+}
+
+function calcularFechasCiclo(fechaCruce: string) {
+  const fechaPartoPrevista = sumarDias(fechaCruce, 115);
+  return {
+    fechaPartoPrevista,
+    fechaVacunaSuicen: sumarDias(fechaPartoPrevista, -15),
+    fechaEnjaule: sumarDias(fechaPartoPrevista, -5),
+    fechaDestetePrevista: sumarDias(fechaPartoPrevista, 30),
+    fechaSiguienteMonta: sumarDias(sumarDias(fechaPartoPrevista, 30), 5),
+  };
 }
 
 export function GranjaProvider({ children }: { children: React.ReactNode }) {
@@ -123,9 +130,8 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      if (ciclo.estadoCiclo === 'lactancia' && ciclo.fechaPartoReal) {
-        const fechaDestetePrevista = new Date(ciclo.fechaPartoReal);
-        fechaDestetePrevista.setDate(fechaDestetePrevista.getDate() + DIAS_LACTANCIA);
+      if (ciclo.estadoCiclo === 'lactancia' && ciclo.fechaDestetePrevista) {
+        const fechaDestetePrevista = new Date(ciclo.fechaDestetePrevista);
         if (fechaDestetePrevista <= enUnaSemana && fechaDestetePrevista >= hoy) {
           const madre = madres.find(m => m.id === ciclo.madreId);
           if (madre) {
@@ -238,15 +244,17 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     const ciclosMadre = ciclos.filter(c => c.madreId === madreId);
     const numeroCiclo = ciclosMadre.length + 1;
     
+    const fechas = calcularFechasCiclo(datosCruce.fechaCruce);
     const nuevoCiclo: Ciclo = {
       id: generarId(),
       madreId,
       numeroCiclo,
       fechaCruce: datosCruce.fechaCruce,
       tipoCruce: datosCruce.tipoCruce,
+      numeroVerraco: datosCruce.numeroVerraco,
       intento: datosCruce.intento,
       observacionesCruce: datosCruce.observaciones,
-      fechaPartoPrevista: calcularFechaPartoPrevista(datosCruce.fechaCruce),
+      ...fechas,
       estadoCiclo: 'gestacion',
       fechaCreacion: new Date().toISOString(),
       fechaActualizacion: new Date().toISOString(),
@@ -267,6 +275,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
         nacidosTotales: datosParto.nacidosTotales,
         nacidosVivos: datosParto.nacidosVivos,
         nacidosMuertos: datosParto.nacidosMuertos,
+        momias: datosParto.momias,
         observacionesParto: datosParto.observaciones,
         estadoCiclo: 'lactancia',
         fechaActualizacion: new Date().toISOString(),
@@ -287,6 +296,8 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
         fechaDestete: datosDestete.fechaDestete,
         destetados: datosDestete.destetados,
         muertesLactancia: datosDestete.muertesLactancia,
+        pesoPromedioNacimiento: datosDestete.pesoPromedioNacimiento,
+        pesoPromedioDestete: datosDestete.pesoPromedioDestete,
         observacionesDestete: datosDestete.observaciones,
         estadoCiclo: 'finalizado',
         fechaActualizacion: new Date().toISOString(),

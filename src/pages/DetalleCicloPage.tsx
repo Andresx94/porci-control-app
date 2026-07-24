@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Baby, Calendar, Users, Check } from 'lucide-react';
+import { ArrowLeft, Baby, Calendar, Users, Check, Syringe } from 'lucide-react';
 import { toast } from 'sonner';
 import { Ciclo } from '@/types';
 
@@ -21,6 +21,8 @@ const estadoLabels: Record<Ciclo['estadoCiclo'], string> = {
   fallido: 'Fallido',
 };
 
+const fmt = (fecha?: string) => fecha ? new Date(fecha).toLocaleDateString('es-ES') : '—';
+
 const DetalleCicloPage = () => {
   const { id: madreId, cicloId } = useParams<{ id: string; cicloId: string }>();
   const navigate = useNavigate();
@@ -29,15 +31,15 @@ const DetalleCicloPage = () => {
   const madre = obtenerMadre(madreId!);
   const ciclo = ciclos.find(c => c.id === cicloId);
   
-  // Estados para formularios
   const [showPartoForm, setShowPartoForm] = useState(false);
   const [showDesteteForm, setShowDesteteForm] = useState(false);
   
   const [partoData, setPartoData] = useState({
     fechaPartoReal: new Date().toISOString().split('T')[0],
-    nacidosTotales: 0,
     nacidosVivos: 0,
     nacidosMuertos: 0,
+    momias: 0,
+    nacidosTotales: 0,
     observaciones: '',
   });
   
@@ -45,6 +47,8 @@ const DetalleCicloPage = () => {
     fechaDestete: new Date().toISOString().split('T')[0],
     destetados: 0,
     muertesLactancia: 0,
+    pesoPromedioNacimiento: '',
+    pesoPromedioDestete: '',
     observaciones: '',
   });
 
@@ -61,47 +65,40 @@ const DetalleCicloPage = () => {
 
   const handleRegistrarParto = (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (partoData.nacidosTotales <= 0) {
-      toast.error('Indica el total de nacidos');
+      toast.error('Indica al menos un nacido');
       return;
     }
-    
-    if (partoData.nacidosVivos + partoData.nacidosMuertos !== partoData.nacidosTotales) {
-      toast.error('La suma de vivos y muertos debe ser igual al total');
-      return;
-    }
-
     registrarParto(ciclo.id, {
       fechaPartoReal: partoData.fechaPartoReal,
       nacidosTotales: partoData.nacidosTotales,
       nacidosVivos: partoData.nacidosVivos,
       nacidosMuertos: partoData.nacidosMuertos,
+      momias: partoData.momias,
       observaciones: partoData.observaciones.trim() || undefined,
     });
-    
     toast.success('Parto registrado correctamente');
     setShowPartoForm(false);
   };
 
   const handleRegistrarDestete = (e: React.FormEvent) => {
     e.preventDefault();
-    
     registrarDestete(ciclo.id, {
       fechaDestete: desteteData.fechaDestete,
       destetados: desteteData.destetados,
       muertesLactancia: desteteData.muertesLactancia,
+      pesoPromedioNacimiento: desteteData.pesoPromedioNacimiento ? parseFloat(desteteData.pesoPromedioNacimiento) : undefined,
+      pesoPromedioDestete: desteteData.pesoPromedioDestete ? parseFloat(desteteData.pesoPromedioDestete) : undefined,
       observaciones: desteteData.observaciones.trim() || undefined,
     });
-    
     toast.success('Destete registrado. Ciclo finalizado.');
     navigate(`/madres/${madreId}`);
   };
 
-  const updateNacidos = (field: 'nacidosVivos' | 'nacidosMuertos', value: number) => {
+  const updateNacidos = (field: 'nacidosVivos' | 'nacidosMuertos' | 'momias', value: number) => {
     setPartoData(prev => {
       const updated = { ...prev, [field]: value };
-      updated.nacidosTotales = updated.nacidosVivos + updated.nacidosMuertos;
+      updated.nacidosTotales = updated.nacidosVivos + updated.nacidosMuertos + updated.momias;
       return updated;
     });
   };
@@ -109,12 +106,7 @@ const DetalleCicloPage = () => {
   return (
     <PageLayout>
       <div className="p-4 space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(`/madres/${madreId}`)}
-          className="mb-2"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate(`/madres/${madreId}`)} className="mb-2">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Volver a {madre.arete}
         </Button>
@@ -136,12 +128,40 @@ const DetalleCicloPage = () => {
                 Cruce
               </div>
               <div className="text-sm text-muted-foreground grid grid-cols-2 gap-2">
-                <span>Fecha: {new Date(ciclo.fechaCruce).toLocaleDateString('es-ES')}</span>
-                <span>Tipo: {ciclo.tipoCruce === 'monta_natural' ? 'Monta' : 'IA'}</span>
+                <span>Fecha: {fmt(ciclo.fechaCruce)}</span>
+                <span>Tipo: {ciclo.tipoCruce === 'monta_natural' ? 'Monta Natural' : 'Inseminación'}</span>
+                {ciclo.numeroVerraco && <span>Verraco: {ciclo.numeroVerraco}</span>}
                 <span>Intento: {ciclo.intento}°</span>
-                {ciclo.fechaPartoPrevista && (
-                  <span>Parto previsto: {new Date(ciclo.fechaPartoPrevista).toLocaleDateString('es-ES')}</span>
-                )}
+              </div>
+            </div>
+
+            {/* Fechas calculadas */}
+            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg space-y-2">
+              <div className="flex items-center gap-2 font-medium text-blue-700 dark:text-blue-300">
+                <Calendar className="h-4 w-4" />
+                Fechas Importantes
+              </div>
+              <div className="text-sm grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-muted-foreground">Parto previsto</span>
+                  <p className="font-medium">{fmt(ciclo.fechaPartoPrevista)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground flex items-center gap-1"><Syringe className="h-3 w-3" /> Vacuna Suicen</span>
+                  <p className="font-medium">{fmt(ciclo.fechaVacunaSuicen)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Enjaule</span>
+                  <p className="font-medium">{fmt(ciclo.fechaEnjaule)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Destete previsto</span>
+                  <p className="font-medium">{fmt(ciclo.fechaDestetePrevista)}</p>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">Siguiente monta</span>
+                  <p className="font-medium">{fmt(ciclo.fechaSiguienteMonta)}</p>
+                </div>
               </div>
             </div>
 
@@ -153,10 +173,11 @@ const DetalleCicloPage = () => {
                   Parto
                 </div>
                 <div className="text-sm text-muted-foreground grid grid-cols-2 gap-2">
-                  <span>Fecha: {new Date(ciclo.fechaPartoReal).toLocaleDateString('es-ES')}</span>
+                  <span>Fecha: {fmt(ciclo.fechaPartoReal)}</span>
                   <span>Total: {ciclo.nacidosTotales}</span>
                   <span>Vivos: {ciclo.nacidosVivos}</span>
                   <span>Muertos: {ciclo.nacidosMuertos}</span>
+                  <span>Momias: {ciclo.momias ?? 0}</span>
                 </div>
               </div>
             )}
@@ -169,33 +190,32 @@ const DetalleCicloPage = () => {
                   Destete
                 </div>
                 <div className="text-sm text-muted-foreground grid grid-cols-2 gap-2">
-                  <span>Fecha: {new Date(ciclo.fechaDestete).toLocaleDateString('es-ES')}</span>
+                  <span>Fecha: {fmt(ciclo.fechaDestete)}</span>
                   <span>Destetados: {ciclo.destetados}</span>
                   <span>Muertes lactancia: {ciclo.muertesLactancia}</span>
+                  {ciclo.pesoPromedioNacimiento && <span>Peso nac.: {ciclo.pesoPromedioNacimiento} kg</span>}
+                  {ciclo.pesoPromedioDestete && <span>Peso dest.: {ciclo.pesoPromedioDestete} kg</span>}
+                  {ciclo.fechaSiguienteMonta && (
+                    <span className="col-span-2 font-medium text-foreground">
+                      Siguiente celo: {fmt(ciclo.fechaSiguienteMonta)}
+                    </span>
+                  )}
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Acciones según estado */}
+        {/* Botones de acción */}
         {ciclo.estadoCiclo === 'gestacion' && !showPartoForm && (
-          <Button
-            size="lg"
-            className="w-full h-14"
-            onClick={() => setShowPartoForm(true)}
-          >
+          <Button size="lg" className="w-full h-14" onClick={() => setShowPartoForm(true)}>
             <Baby className="h-5 w-5 mr-2" />
             Registrar Parto
           </Button>
         )}
 
         {ciclo.estadoCiclo === 'lactancia' && !showDesteteForm && (
-          <Button
-            size="lg"
-            className="w-full h-14"
-            onClick={() => setShowDesteteForm(true)}
-          >
+          <Button size="lg" className="w-full h-14" onClick={() => setShowDesteteForm(true)}>
             <Users className="h-5 w-5 mr-2" />
             Registrar Destete
           </Button>
@@ -219,7 +239,7 @@ const DetalleCicloPage = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="nacidosVivos">Nacidos Vivos</Label>
                     <Input
@@ -238,6 +258,16 @@ const DetalleCicloPage = () => {
                       min="0"
                       value={partoData.nacidosMuertos}
                       onChange={(e) => updateNacidos('nacidosMuertos', parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="momias">Momias</Label>
+                    <Input
+                      id="momias"
+                      type="number"
+                      min="0"
+                      value={partoData.momias}
+                      onChange={(e) => updateNacidos('momias', parseInt(e.target.value) || 0)}
                     />
                   </div>
                 </div>
@@ -297,7 +327,6 @@ const DetalleCicloPage = () => {
                       id="destetados"
                       type="number"
                       min="0"
-                      max={ciclo.nacidosVivos || 99}
                       value={desteteData.destetados}
                       onChange={(e) => setDesteteData(prev => ({ ...prev, destetados: parseInt(e.target.value) || 0 }))}
                     />
@@ -310,6 +339,30 @@ const DetalleCicloPage = () => {
                       min="0"
                       value={desteteData.muertesLactancia}
                       onChange={(e) => setDesteteData(prev => ({ ...prev, muertesLactancia: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pesoNacimiento">Peso prom. nacimiento (kg)</Label>
+                    <Input
+                      id="pesoNacimiento"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Ej: 1.35"
+                      value={desteteData.pesoPromedioNacimiento}
+                      onChange={(e) => setDesteteData(prev => ({ ...prev, pesoPromedioNacimiento: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pesoDestete">Peso prom. destete (kg)</Label>
+                    <Input
+                      id="pesoDestete"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Ej: 6.50"
+                      value={desteteData.pesoPromedioDestete}
+                      onChange={(e) => setDesteteData(prev => ({ ...prev, pesoPromedioDestete: e.target.value }))}
                     />
                   </div>
                 </div>

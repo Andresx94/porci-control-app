@@ -15,6 +15,9 @@ export interface Madre {
   fechaRegistro: string;
   fechaDescarte?: string;
   motivoDescarte?: string;
+  // Genealogía
+  areteMadre?: string;
+  aretePadre?: string;
 }
 
 export interface Ciclo {
@@ -24,19 +27,28 @@ export interface Ciclo {
   // Datos de cruce
   fechaCruce: string;
   tipoCruce: TipoCruce;
+  numeroVerraco?: string;
   intento: number;
   observacionesCruce?: string;
+  // Fechas calculadas automáticamente
+  fechaPartoPrevista?: string;    // fechaCruce + 115 días
+  fechaVacunaSuicen?: string;     // fechaPartoPrevista - 15 días
+  fechaEnjaule?: string;          // fechaPartoPrevista - 5 días
+  fechaDestetePrevista?: string;  // fechaPartoPrevista + 30 días
+  fechaSiguienteMonta?: string;   // fechaDestetePrevista + 5 días
   // Datos de parto
-  fechaPartoPrevista?: string;
   fechaPartoReal?: string;
   nacidosTotales?: number;
   nacidosVivos?: number;
   nacidosMuertos?: number;
+  momias?: number;
   observacionesParto?: string;
   // Datos de lactancia/destete
   fechaDestete?: string;
   destetados?: number;
   muertesLactancia?: number;
+  pesoPromedioNacimiento?: number;
+  pesoPromedioDestete?: number;
   observacionesDestete?: string;
   // Estado
   estadoCiclo: EstadoCiclo;
@@ -67,6 +79,7 @@ export interface EstadisticasDashboard {
 export interface DatosCruce {
   fechaCruce: string;
   tipoCruce: TipoCruce;
+  numeroVerraco?: string;
   intento: number;
   observaciones?: string;
 }
@@ -76,6 +89,7 @@ export interface DatosParto {
   nacidosTotales: number;
   nacidosVivos: number;
   nacidosMuertos: number;
+  momias: number;
   observaciones?: string;
 }
 
@@ -83,5 +97,7 @@ export interface DatosDestete {
   fechaDestete: string;
   destetados: number;
   muertesLactancia: number;
+  pesoPromedioNacimiento?: number;
+  pesoPromedioDestete?: number;
   observaciones?: string;
 }

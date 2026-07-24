@@ -17,6 +17,8 @@ const NuevaMadrePage = () => {
   const [formData, setFormData] = useState({
     arete: '',
     fechaNacimiento: '',
+    areteMadre: '',
+    aretePadre: '',
     observaciones: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,6 +37,8 @@ const NuevaMadrePage = () => {
       agregarMadre({
         arete: formData.arete.trim().toUpperCase(),
         fechaNacimiento: formData.fechaNacimiento || undefined,
+        areteMadre: formData.areteMadre.trim().toUpperCase() || undefined,
+        aretePadre: formData.aretePadre.trim().toUpperCase() || undefined,
         estado: 'vacia',
         observaciones: formData.observaciones.trim() || undefined,
       });
@@ -48,15 +52,13 @@ const NuevaMadrePage = () => {
     }
   };
 
+  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setFormData(prev => ({ ...prev, [field]: e.target.value }));
+
   return (
     <PageLayout>
       <div className="p-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="mb-4"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Volver
         </Button>
@@ -73,7 +75,7 @@ const NuevaMadrePage = () => {
                   id="arete"
                   placeholder="Ej: M-001"
                   value={formData.arete}
-                  onChange={(e) => setFormData(prev => ({ ...prev, arete: e.target.value }))}
+                  onChange={set('arete')}
                   className="text-lg"
                   autoFocus
                 />
@@ -85,8 +87,29 @@ const NuevaMadrePage = () => {
                   id="fechaNacimiento"
                   type="date"
                   value={formData.fechaNacimiento}
-                  onChange={(e) => setFormData(prev => ({ ...prev, fechaNacimiento: e.target.value }))}
+                  onChange={set('fechaNacimiento')}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="areteMadre">Arete de la Madre</Label>
+                  <Input
+                    id="areteMadre"
+                    placeholder="Ej: M-010"
+                    value={formData.areteMadre}
+                    onChange={set('areteMadre')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="aretePadre">Arete del Padre (Verraco)</Label>
+                  <Input
+                    id="aretePadre"
+                    placeholder="Ej: V-002"
+                    value={formData.aretePadre}
+                    onChange={set('aretePadre')}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -95,16 +118,12 @@ const NuevaMadrePage = () => {
                   id="observaciones"
                   placeholder="Notas adicionales..."
                   value={formData.observaciones}
-                  onChange={(e) => setFormData(prev => ({ ...prev, observaciones: e.target.value }))}
+                  onChange={set('observaciones')}
                   rows={3}
                 />
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full h-12 text-lg"
-                disabled={isSubmitting}
-              >
+              <Button type="submit" className="w-full h-12 text-lg" disabled={isSubmitting}>
                 {isSubmitting ? 'Guardando...' : 'Registrar Madre'}
               </Button>
             </form>
