@@ -12,8 +12,10 @@ export interface Madre {
   fechaNacimiento?: string;
   estado: EstadoMadre;
   observaciones?: string;
-  fechaRegistro: string;
+  fechaRegistro: string;          // Día de calendario 'AAAA-MM-DD', como todas las fecha*
+  registradoEn?: string;          // Instante real (ISO con hora)
   fechaDescarte?: string;
+  descartadoEn?: string;          // Instante real (ISO con hora)
   motivoDescarte?: string;
   // Genealogía
   areteMadre?: string;
@@ -52,8 +54,8 @@ export interface Ciclo {
   observacionesDestete?: string;
   // Estado
   estadoCiclo: EstadoCiclo;
-  fechaCreacion: string;
-  fechaActualizacion: string;
+  fechaCreacion: string;          // Instante real (ISO con hora)
+  fechaActualizacion: string;     // Instante real (ISO con hora)
 }
 
 export interface Alerta {

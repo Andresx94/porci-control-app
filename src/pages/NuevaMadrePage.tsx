@@ -38,7 +38,7 @@ const NuevaMadrePage = () => {
         arete: formData.arete.trim().toUpperCase(),
         fechaNacimiento: formData.fechaNacimiento || undefined,
         areteMadre: formData.areteMadre.trim().toUpperCase() || undefined,
-        aretePadre: formData.aretePadre.trim().toUpperCase() || undefined,
+        aretePadre: formData.aretePadre.trim() || undefined,
         estado: 'vacia',
         observaciones: formData.observaciones.trim() || undefined,
       });
@@ -102,10 +102,10 @@ const NuevaMadrePage = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="aretePadre">Arete del Padre (Verraco)</Label>
+                  <Label htmlFor="aretePadre">Verraco</Label>
                   <Input
                     id="aretePadre"
-                    placeholder="Ej: V-002"
+                    placeholder="Nombre o referencia"
                     value={formData.aretePadre}
                     onChange={set('aretePadre')}
                   />

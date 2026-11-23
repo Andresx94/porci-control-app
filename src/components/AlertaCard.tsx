@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
 import { Alerta } from '@/types';
 import { AlertTriangle, Baby, Heart, Calendar } from 'lucide-react';
+import { formatFecha } from '@/lib/fechas';
 
 interface AlertaCardProps {
   alerta: Alerta;
@@ -47,7 +48,7 @@ export function AlertaCard({ alerta, arete, onClick }: AlertaCardProps) {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {arete && <span>{arete}</span>}
           <span>•</span>
-          <span>{new Date(alerta.fechaAlerta).toLocaleDateString('es-ES')}</span>
+          <span>{formatFecha(alerta.fechaAlerta)}</span>
         </div>
       </div>
     </button>

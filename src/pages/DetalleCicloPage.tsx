@@ -8,9 +8,19 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Baby, Calendar, Users, Check, Syringe } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ArrowLeft, Baby, Calendar, Users, Check, Syringe, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
-import { Ciclo } from '@/types';
+import { Ciclo, TipoCruce } from '@/types';
+import { formatFecha as fmt, hoyISO, sumarDias } from '@/lib/fechas';
 
 const estadoLabels: Record<Ciclo['estadoCiclo'], string> = {
   cruce: 'Cruce',
@@ -21,21 +31,34 @@ const estadoLabels: Record<Ciclo['estadoCiclo'], string> = {
   fallido: 'Fallido',
 };
 
-const fmt = (fecha?: string) => fecha ? new Date(fecha).toLocaleDateString('es-ES') : '—';
+const Observaciones = ({ texto }: { texto?: string }) => texto ? (
+  <div className="text-sm border-t border-border/60 pt-2">
+    <span className="text-muted-foreground">Observaciones</span>
+    <p className="whitespace-pre-wrap break-words">{texto}</p>
+  </div>
+) : null;
 
 const DetalleCicloPage = () => {
   const { id: madreId, cicloId } = useParams<{ id: string; cicloId: string }>();
   const navigate = useNavigate();
-  const { obtenerMadre, ciclos, registrarParto, registrarDestete } = useGranja();
+  const { obtenerMadre, ciclos, editarCruce, registrarParto, registrarDestete } = useGranja();
   
   const madre = obtenerMadre(madreId!);
   const ciclo = ciclos.find(c => c.id === cicloId);
   
   const [showPartoForm, setShowPartoForm] = useState(false);
   const [showDesteteForm, setShowDesteteForm] = useState(false);
-  
+  const [showEditarCruce, setShowEditarCruce] = useState(false);
+  const [cruceData, setCruceData] = useState({
+    fechaCruce: '',
+    tipoCruce: 'monta_natural' as TipoCruce,
+    numeroVerraco: '',
+    intento: 1,
+    observaciones: '',
+  });
+
   const [partoData, setPartoData] = useState({
-    fechaPartoReal: new Date().toISOString().split('T')[0],
+    fechaPartoReal: hoyISO(),
     nacidosVivos: 0,
     nacidosMuertos: 0,
     momias: 0,
@@ -44,7 +67,7 @@ const DetalleCicloPage = () => {
   });
   
   const [desteteData, setDesteteData] = useState({
-    fechaDestete: new Date().toISOString().split('T')[0],
+    fechaDestete: hoyISO(),
     destetados: 0,
     muertesLactancia: 0,
     pesoPromedioNacimiento: '',
@@ -62,6 +85,42 @@ const DetalleCicloPage = () => {
       </PageLayout>
     );
   }
+
+  const abrirEditarCruce = () => {
+    setCruceData({
+      fechaCruce: ciclo.fechaCruce,
+      tipoCruce: ciclo.tipoCruce,
+      numeroVerraco: ciclo.numeroVerraco ?? '',
+      intento: ciclo.intento,
+      observaciones: ciclo.observacionesCruce ?? '',
+    });
+    setShowEditarCruce(true);
+  };
+
+  const handleGuardarCruce = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cruceData.fechaCruce) {
+      toast.error('La fecha de cruce es obligatoria');
+      return;
+    }
+    if (cruceData.fechaCruce > hoyISO()) {
+      toast.error('La fecha de cruce no puede ser futura');
+      return;
+    }
+    if (ciclo.fechaPartoReal && cruceData.fechaCruce >= ciclo.fechaPartoReal) {
+      toast.error('La fecha de cruce debe ser anterior al parto registrado');
+      return;
+    }
+    editarCruce(ciclo.id, {
+      fechaCruce: cruceData.fechaCruce,
+      tipoCruce: cruceData.tipoCruce,
+      numeroVerraco: cruceData.numeroVerraco.trim() || undefined,
+      intento: cruceData.intento,
+      observaciones: cruceData.observaciones.trim() || undefined,
+    });
+    toast.success('Cruce actualizado');
+    setShowEditarCruce(false);
+  };
 
   const handleRegistrarParto = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,9 +182,15 @@ const DetalleCicloPage = () => {
           <CardContent className="space-y-4">
             {/* Datos de cruce */}
             <div className="p-3 bg-muted rounded-lg space-y-2">
-              <div className="flex items-center gap-2 font-medium">
-                <Calendar className="h-4 w-4" />
-                Cruce
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 font-medium">
+                  <Calendar className="h-4 w-4" />
+                  Cruce
+                </div>
+                <Button variant="outline" size="sm" className="h-8" onClick={abrirEditarCruce}>
+                  <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                  Editar
+                </Button>
               </div>
               <div className="text-sm text-muted-foreground grid grid-cols-2 gap-2">
                 <span>Fecha: {fmt(ciclo.fechaCruce)}</span>
@@ -133,6 +198,7 @@ const DetalleCicloPage = () => {
                 {ciclo.numeroVerraco && <span>Verraco: {ciclo.numeroVerraco}</span>}
                 <span>Intento: {ciclo.intento}°</span>
               </div>
+              <Observaciones texto={ciclo.observacionesCruce} />
             </div>
 
             {/* Fechas calculadas */}
@@ -179,6 +245,7 @@ const DetalleCicloPage = () => {
                   <span>Muertos: {ciclo.nacidosMuertos}</span>
                   <span>Momias: {ciclo.momias ?? 0}</span>
                 </div>
+                <Observaciones texto={ciclo.observacionesParto} />
               </div>
             )}
 
@@ -201,6 +268,7 @@ const DetalleCicloPage = () => {
                     </span>
                   )}
                 </div>
+                <Observaciones texto={ciclo.observacionesDestete} />
               </div>
             )}
           </CardContent>
@@ -392,6 +460,101 @@ const DetalleCicloPage = () => {
           </Card>
         )}
       </div>
+
+      {/* Editar cruce */}
+      <Dialog open={showEditarCruce} onOpenChange={setShowEditarCruce}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar cruce</DialogTitle>
+            <DialogDescription>
+              Al cambiar la fecha se recalculan parto, vacuna, enjaule, destete y siguiente monta.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleGuardarCruce} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editFechaCruce">Fecha de Cruce / Monta *</Label>
+              <Input
+                id="editFechaCruce"
+                type="date"
+                max={hoyISO()}
+                value={cruceData.fechaCruce}
+                onChange={(e) => setCruceData(prev => ({ ...prev, fechaCruce: e.target.value }))}
+              />
+              {cruceData.fechaCruce && (
+                <p className="text-sm text-muted-foreground">
+                  Parto previsto: <span className="font-medium text-foreground">{fmt(sumarDias(cruceData.fechaCruce, 115))}</span>
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tipo de Cruce</Label>
+              <RadioGroup
+                value={cruceData.tipoCruce}
+                onValueChange={(value) => setCruceData(prev => ({ ...prev, tipoCruce: value as TipoCruce }))}
+                className="grid grid-cols-2 gap-2"
+              >
+                <Label htmlFor="editMonta" className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer">
+                  <RadioGroupItem value="monta_natural" id="editMonta" />
+                  <span>Monta Natural</span>
+                </Label>
+                <Label htmlFor="editInseminacion" className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer">
+                  <RadioGroupItem value="inseminacion" id="editInseminacion" />
+                  <span>Inseminación</span>
+                </Label>
+              </RadioGroup>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editVerraco">Verraco</Label>
+              <Input
+                id="editVerraco"
+                placeholder="Nombre o referencia"
+                value={cruceData.numeroVerraco}
+                onChange={(e) => setCruceData(prev => ({ ...prev, numeroVerraco: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Número de Intento</Label>
+              <div className="flex gap-2">
+                {[1, 2, 3].map(num => (
+                  <Button
+                    key={num}
+                    type="button"
+                    variant={cruceData.intento === num ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setCruceData(prev => ({ ...prev, intento: num }))}
+                  >
+                    {num}°
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editObsCruce">Observaciones</Label>
+              <Textarea
+                id="editObsCruce"
+                placeholder="Notas sobre el cruce..."
+                value={cruceData.observaciones}
+                onChange={(e) => setCruceData(prev => ({ ...prev, observaciones: e.target.value }))}
+                rows={3}
+              />
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowEditarCruce(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                <Check className="h-4 w-4 mr-2" />
+                Guardar cambios
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </PageLayout>
   );
 };

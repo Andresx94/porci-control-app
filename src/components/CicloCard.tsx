@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils';
 import { Ciclo } from '@/types';
 import { Calendar, Baby, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { formatFecha } from '@/lib/fechas';
 
 interface CicloCardProps {
   ciclo: Ciclo;
@@ -45,14 +46,14 @@ export function CicloCard({ ciclo, onClick }: CicloCardProps) {
       <div className="space-y-2 text-sm">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Calendar className="h-4 w-4" />
-          <span>Cruce: {new Date(ciclo.fechaCruce).toLocaleDateString('es-ES')}</span>
+          <span>Cruce: {formatFecha(ciclo.fechaCruce)}</span>
         </div>
         
         {ciclo.fechaPartoReal && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Baby className="h-4 w-4" />
             <span>
-              Parto: {new Date(ciclo.fechaPartoReal).toLocaleDateString('es-ES')} 
+              Parto: {formatFecha(ciclo.fechaPartoReal)}{' '}
               ({ciclo.nacidosVivos} vivos / {ciclo.nacidosTotales} total)
             </span>
           </div>

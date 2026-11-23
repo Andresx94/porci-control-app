@@ -4,6 +4,7 @@ import { LucideIcon } from 'lucide-react';
 interface StatCardProps {
   icon: LucideIcon;
   label: string;
+  hint?: string;
   value: number | string;
   variant?: 'default' | 'primary' | 'warning' | 'success';
   onClick?: () => void;
@@ -23,27 +24,28 @@ const iconStyles = {
   success: 'text-primary',
 };
 
-export function StatCard({ icon: Icon, label, value, variant = 'default', onClick }: StatCardProps) {
+export function StatCard({ icon: Icon, label, hint, value, variant = 'default', onClick }: StatCardProps) {
   const Component = onClick ? 'button' : 'div';
   
   return (
     <Component
       onClick={onClick}
       className={cn(
-        "flex items-center gap-4 p-4 rounded-lg border transition-all",
+        "flex items-center gap-3 p-3 sm:gap-4 sm:p-4 rounded-lg border transition-all",
         variantStyles[variant],
         onClick && "hover:scale-[1.02] active:scale-[0.98] cursor-pointer w-full text-left"
       )}
     >
       <div className={cn(
-        "flex items-center justify-center w-12 h-12 rounded-full bg-background/50",
+        "flex flex-shrink-0 items-center justify-center w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-background/50",
         iconStyles[variant]
       )}>
-        <Icon className="h-6 w-6" />
+        <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-muted-foreground truncate">{label}</p>
+        <p className="text-sm leading-tight text-muted-foreground">{label}</p>
         <p className="text-2xl font-bold text-foreground">{value}</p>
+        {hint && <p className="text-xs leading-tight text-muted-foreground">{hint}</p>}
       </div>
     </Component>
   );

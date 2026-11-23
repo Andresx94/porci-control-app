@@ -11,6 +11,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ArrowLeft, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { TipoCruce } from '@/types';
+import { hoyISO } from '@/lib/fechas';
 
 const NuevoCicloPage = () => {
   const { id: madreId } = useParams<{ id: string }>();
@@ -21,7 +22,7 @@ const NuevoCicloPage = () => {
   const ciclosAnteriores = obtenerCiclosMadre(madreId!);
   
   const [formData, setFormData] = useState({
-    fechaCruce: new Date().toISOString().split('T')[0],
+    fechaCruce: hoyISO(),
     tipoCruce: 'monta_natural' as TipoCruce,
     numeroVerraco: '',
     intento: 1,
@@ -121,10 +122,10 @@ const NuevoCicloPage = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="numeroVerraco">N° de Verraco</Label>
+                <Label htmlFor="numeroVerraco">Verraco</Label>
                 <Input
                   id="numeroVerraco"
-                  placeholder="Ej: V-003"
+                  placeholder="Nombre o referencia"
                   value={formData.numeroVerraco}
                   onChange={set('numeroVerraco')}
                 />

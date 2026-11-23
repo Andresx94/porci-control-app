@@ -13,24 +13,27 @@ import {
 } from '@/components/ui/dialog';
 import { Trash2, Download, Upload, Info } from 'lucide-react';
 import { toast } from 'sonner';
+import { hoyISO } from '@/lib/fechas';
+import { borrarDatos, esDemo, importarDatos } from '@/lib/datos';
 
 const AjustesPage = () => {
   const { madres, ciclos } = useGranja();
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const demo = esDemo();
 
   const handleExportData = () => {
     const data = {
       madres,
       ciclos,
       exportDate: new Date().toISOString(),
-      version: '1.0',
+      version: '2.0',
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `porcicontrol-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `porcicontrol-backup-${hoyISO()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -49,8 +52,7 @@ const AjustesPage = () => {
         const data = JSON.parse(e.target?.result as string);
         
         if (data.madres && data.ciclos) {
-          localStorage.setItem('granja_madres', JSON.stringify(data.madres));
-          localStorage.setItem('granja_ciclos', JSON.stringify(data.ciclos));
+          importarDatos(data);
           toast.success('Datos importados. Recarga la página para ver los cambios.');
           setTimeout(() => window.location.reload(), 1500);
         } else {
@@ -64,9 +66,7 @@ const AjustesPage = () => {
   };
 
   const handleResetData = () => {
-    localStorage.removeItem('granja_madres');
-    localStorage.removeItem('granja_ciclos');
-    localStorage.removeItem('granja_alertas');
+    borrarDatos();
     toast.success('Datos eliminados');
     setShowResetDialog(false);
     setTimeout(() => window.location.reload(), 1000);
@@ -102,14 +102,22 @@ const AjustesPage = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Almacenamiento</span>
-                <span>Local (dispositivo)</span>
+                <span>{demo ? 'Demo (este navegador)' : 'Local (dispositivo)'}</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
+        {!demo && (
+          <Button variant="outline" className="w-full h-12" asChild>
+            <a href={window.location.pathname}>
+              Ver demo con datos de ejemplo
+            </a>
+          </Button>
+        )}
+
         {/* Backup */}
-        <Card>
+        {!demo && <Card>
           <CardHeader>
             <CardTitle>Respaldo de Datos</CardTitle>
             <CardDescription>
@@ -142,10 +150,10 @@ const AjustesPage = () => {
               </Button>
             </div>
           </CardContent>
-        </Card>
+        </Card>}
 
         {/* Zona de peligro */}
-        <Card className="border-destructive/50">
+        {!demo && <Card className="border-destructive/50">
           <CardHeader>
             <CardTitle className="text-destructive">Zona de Peligro</CardTitle>
             <CardDescription>
@@ -162,12 +170,14 @@ const AjustesPage = () => {
               Eliminar Todos los Datos
             </Button>
           </CardContent>
-        </Card>
+        </Card>}
 
         {/* Créditos */}
         <div className="text-center text-sm text-muted-foreground py-4">
           <p>Desarrollado para granjas porcinas</p>
-          <p className="text-xs mt-1">Los datos se guardan localmente en tu dispositivo</p>
+          <p className="text-xs mt-1">
+            {demo ? 'Los cambios de la demo quedan en este navegador hasta restablecer' : 'Los datos se guardan localmente en tu dispositivo'}
+          </p>
         </div>
       </div>
 

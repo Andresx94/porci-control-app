@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageLayout } from '@/components/PageLayout';
 import { MadreCard } from '@/components/MadreCard';
 import { EmptyState } from '@/components/EmptyState';
@@ -7,20 +7,54 @@ import { useGranja } from '@/contexts/GranjaContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Plus, Search } from 'lucide-react';
-import { EstadoMadre } from '@/types';
+import { Users, Plus, Search, ArrowDown01, ArrowUp10 } from 'lucide-react';
+import { compararAretes, esProximaAParir } from '@/lib/fechas';
+import { guardarPreferencia, leerPreferencia } from '@/lib/datos';
+
+const FILTROS = [
+  { value: 'todas', label: 'Todas' },
+  { value: 'gestacion', label: 'Gestación' },
+  { value: 'proximas', label: 'Próximas a parir' },
+  { value: 'lactancia', label: 'Lactancia' },
+  { value: 'vacia', label: 'Vacías' },
+];
+
+const ORDEN_KEY = 'granja_orden_madres';
+
+const leerOrden = (): 'asc' | 'desc' => (leerPreferencia(ORDEN_KEY) === 'desc' ? 'desc' : 'asc');
 
 const MadresPage = () => {
   const navigate = useNavigate();
-  const { madres, obtenerCiclosMadre } = useGranja();
+  const { madres, ciclos, obtenerCiclosMadre } = useGranja();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [busqueda, setBusqueda] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState<'todas' | EstadoMadre>('todas');
+  const [orden, setOrden] = useState<'asc' | 'desc'>(leerOrden);
 
-  const madresFiltradas = madres.filter(madre => {
-    const matchBusqueda = madre.arete.toLowerCase().includes(busqueda.toLowerCase());
-    const matchEstado = filtroEstado === 'todas' || madre.estado === filtroEstado;
-    return matchBusqueda && matchEstado;
-  });
+  const estadoUrl = searchParams.get('estado');
+  const filtroEstado = FILTROS.some(f => f.value === estadoUrl) ? estadoUrl! : 'todas';
+
+  const cambiarFiltro = (value: string) => {
+    setSearchParams(value === 'todas' ? {} : { estado: value }, { replace: true });
+  };
+
+  const cambiarOrden = () => {
+    const nuevo = orden === 'asc' ? 'desc' : 'asc';
+    setOrden(nuevo);
+    guardarPreferencia(ORDEN_KEY, nuevo);
+  };
+
+  const madresFiltradas = madres
+    .filter(madre => {
+      const matchBusqueda = madre.arete.toLowerCase().includes(busqueda.toLowerCase());
+      const matchEstado = filtroEstado === 'todas'
+        || (filtroEstado === 'proximas'
+          ? ciclos.some(c => c.madreId === madre.id && esProximaAParir(c))
+          : madre.estado === filtroEstado);
+      return matchBusqueda && matchEstado;
+    })
+    .sort((a, b) => (orden === 'asc' ? 1 : -1) * compararAretes(a.arete, b.arete));
+
+  const hayFiltros = filtroEstado !== 'todas' || busqueda.trim() !== '';
 
   const madresActivas = madresFiltradas.filter(m => m.estado !== 'descartada');
   const madresDescartadas = madresFiltradas.filter(m => m.estado === 'descartada');
@@ -53,22 +87,25 @@ const MadresPage = () => {
 
         {/* Filtros rápidos */}
         <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
-          {[
-            { value: 'todas', label: 'Todas' },
-            { value: 'gestacion', label: 'Gestación' },
-            { value: 'lactancia', label: 'Lactancia' },
-            { value: 'vacia', label: 'Vacías' },
-          ].map(({ value, label }) => (
+          {FILTROS.map(({ value, label }) => (
             <Button
               key={value}
               variant={filtroEstado === value ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setFiltroEstado(value as 'todas' | EstadoMadre)}
+              onClick={() => cambiarFiltro(value)}
               className="flex-shrink-0"
             >
               {label}
             </Button>
           ))}
+        </div>
+
+        {/* Orden */}
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" onClick={cambiarOrden}>
+            {orden === 'asc' ? <ArrowDown01 className="h-4 w-4 mr-2" /> : <ArrowUp10 className="h-4 w-4 mr-2" />}
+            {orden === 'asc' ? 'Arete: menor a mayor' : 'Arete: mayor a menor'}
+          </Button>
         </div>
 
         {/* Lista de madres */}
@@ -92,6 +129,10 @@ const MadresPage = () => {
                     ultimoCicloInfo={getUltimoCicloInfo(madre.id)}
                   />
                 ))}
+              </div>
+            ) : hayFiltros ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>Ninguna madre coincide con este filtro</p>
               </div>
             ) : (
               <EmptyState

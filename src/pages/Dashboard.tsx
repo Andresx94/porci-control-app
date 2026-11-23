@@ -48,26 +48,34 @@ const Dashboard = () => {
           <StatCard
             icon={Baby}
             label="En Gestación"
+            hint="Preñadas"
             value={estadisticas.enGestacion}
             variant="success"
+            onClick={() => navigate('/madres?estado=gestacion')}
           />
           <StatCard
             icon={Clock}
             label="Próximas a Parir"
+            hint="En 7 días o atrasadas"
             value={estadisticas.proximasParir}
             variant={estadisticas.proximasParir > 0 ? 'warning' : 'default'}
+            onClick={() => navigate('/madres?estado=proximas')}
           />
           <StatCard
             icon={Heart}
             label="Listas para Cruce"
+            hint="Vacías"
             value={estadisticas.listasParaCruce}
             variant="default"
+            onClick={() => navigate('/madres?estado=vacia')}
           />
           <StatCard
             icon={Users}
             label="En Lactancia"
+            hint="Con crías, sin destetar"
             value={estadisticas.enLactancia}
             variant="success"
+            onClick={() => navigate('/madres?estado=lactancia')}
           />
         </div>
 

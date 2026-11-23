@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { ArrowLeft, Calendar, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Madre } from '@/types';
+import { formatFecha } from '@/lib/fechas';
 
 const estadoLabels: Record<Madre['estado'], string> = {
   activa: 'Activa',
@@ -100,14 +101,20 @@ const DetalleMadrePage = () => {
             {madre.fechaNacimiento && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="h-4 w-4" />
-                <span>Nacimiento: {new Date(madre.fechaNacimiento).toLocaleDateString('es-ES')}</span>
+                <span>Nacimiento: {formatFecha(madre.fechaNacimiento)}</span>
               </div>
             )}
             <div className="text-sm text-muted-foreground">
-              <span>Registro: {new Date(madre.fechaRegistro).toLocaleDateString('es-ES')}</span>
+              <span>Registro: {formatFecha(madre.fechaRegistro)}</span>
             </div>
+            {(madre.areteMadre || madre.aretePadre) && (
+              <div className="text-sm text-muted-foreground grid grid-cols-2 gap-2">
+                {madre.areteMadre && <span>Arete de la madre: {madre.areteMadre}</span>}
+                {madre.aretePadre && <span>Verraco: {madre.aretePadre}</span>}
+              </div>
+            )}
             {madre.observaciones && (
-              <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
+              <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg whitespace-pre-wrap break-words">
                 {madre.observaciones}
               </p>
             )}

@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Madre, Ciclo, Alerta, EstadisticasDashboard, EstadoMadre, DatosCruce, DatosParto, DatosDestete } from '@/types';
+import { calcularFechasCiclo, diasEntre, esProximaAParir, hoyISO, sumarDias } from '@/lib/fechas';
+import { cargarDatos, CLAVES, guardarLista } from '@/lib/datos';
 
 interface GranjaContextType {
   // Datos
@@ -16,6 +18,7 @@ interface GranjaContextType {
   
   // Acciones Ciclos
   iniciarCiclo: (madreId: string, datosCruce: DatosCruce) => Ciclo;
+  editarCruce: (cicloId: string, datosCruce: DatosCruce) => void;
   registrarParto: (cicloId: string, datosParto: DatosParto) => void;
   registrarDestete: (cicloId: string, datosDestete: DatosDestete) => void;
   obtenerCiclosMadre: (madreId: string) => Ciclo[];
@@ -30,31 +33,8 @@ interface GranjaContextType {
 
 const GranjaContext = createContext<GranjaContextType | undefined>(undefined);
 
-const STORAGE_KEYS = {
-  MADRES: 'granja_madres',
-  CICLOS: 'granja_ciclos',
-  ALERTAS: 'granja_alertas',
-};
-
 function generarId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-}
-
-function sumarDias(fecha: string, dias: number): string {
-  const d = new Date(fecha);
-  d.setDate(d.getDate() + dias);
-  return d.toISOString().split('T')[0];
-}
-
-function calcularFechasCiclo(fechaCruce: string) {
-  const fechaPartoPrevista = sumarDias(fechaCruce, 115);
-  return {
-    fechaPartoPrevista,
-    fechaVacunaSuicen: sumarDias(fechaPartoPrevista, -15),
-    fechaEnjaule: sumarDias(fechaPartoPrevista, -5),
-    fechaDestetePrevista: sumarDias(fechaPartoPrevista, 30),
-    fechaSiguienteMonta: sumarDias(sumarDias(fechaPartoPrevista, 30), 5),
-  };
 }
 
 export function GranjaProvider({ children }: { children: React.ReactNode }) {
@@ -63,16 +43,13 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
   const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Cargar datos de localStorage al inicio
+  // Cargar datos al inicio (reales o de demo, según la URL)
   useEffect(() => {
     try {
-      const madresGuardadas = localStorage.getItem(STORAGE_KEYS.MADRES);
-      const ciclosGuardados = localStorage.getItem(STORAGE_KEYS.CICLOS);
-      const alertasGuardadas = localStorage.getItem(STORAGE_KEYS.ALERTAS);
-
-      if (madresGuardadas) setMadres(JSON.parse(madresGuardadas));
-      if (ciclosGuardados) setCiclos(JSON.parse(ciclosGuardados));
-      if (alertasGuardadas) setAlertas(JSON.parse(alertasGuardadas));
+      const datos = cargarDatos();
+      setMadres(datos.madres);
+      setCiclos(datos.ciclos);
+      setAlertas(datos.alertas);
     } catch (error) {
       console.error('Error cargando datos:', error);
     } finally {
@@ -80,23 +57,17 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Guardar cambios en localStorage
+  // Guardar cambios
   useEffect(() => {
-    if (!isLoading) {
-      localStorage.setItem(STORAGE_KEYS.MADRES, JSON.stringify(madres));
-    }
+    if (!isLoading) guardarLista(CLAVES.MADRES, madres);
   }, [madres, isLoading]);
 
   useEffect(() => {
-    if (!isLoading) {
-      localStorage.setItem(STORAGE_KEYS.CICLOS, JSON.stringify(ciclos));
-    }
+    if (!isLoading) guardarLista(CLAVES.CICLOS, ciclos);
   }, [ciclos, isLoading]);
 
   useEffect(() => {
-    if (!isLoading) {
-      localStorage.setItem(STORAGE_KEYS.ALERTAS, JSON.stringify(alertas));
-    }
+    if (!isLoading) guardarLista(CLAVES.ALERTAS, alertas);
   }, [alertas, isLoading]);
 
   // Generar alertas automáticamente
@@ -104,13 +75,12 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
     
     const nuevasAlertas: Alerta[] = [];
-    const hoy = new Date();
-    const enUnaSemana = new Date();
-    enUnaSemana.setDate(hoy.getDate() + 7);
+    const hoy = hoyISO();
+    const enUnaSemana = sumarDias(hoy, 7);
 
     ciclos.forEach(ciclo => {
       if (ciclo.estadoCiclo === 'gestacion' && ciclo.fechaPartoPrevista) {
-        const fechaParto = new Date(ciclo.fechaPartoPrevista);
+        const fechaParto = ciclo.fechaPartoPrevista;
         if (fechaParto <= enUnaSemana && fechaParto >= hoy) {
           const madre = madres.find(m => m.id === ciclo.madreId);
           if (madre) {
@@ -131,7 +101,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (ciclo.estadoCiclo === 'lactancia' && ciclo.fechaDestetePrevista) {
-        const fechaDestetePrevista = new Date(ciclo.fechaDestetePrevista);
+        const fechaDestetePrevista = ciclo.fechaDestetePrevista;
         if (fechaDestetePrevista <= enUnaSemana && fechaDestetePrevista >= hoy) {
           const madre = madres.find(m => m.id === ciclo.madreId);
           if (madre) {
@@ -142,7 +112,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
                 tipo: 'destete_pendiente',
                 madreId: ciclo.madreId,
                 mensaje: `${madre.arete} lista para destete`,
-                fechaAlerta: fechaDestetePrevista.toISOString().split('T')[0],
+                fechaAlerta: fechaDestetePrevista,
                 prioridad: 'media',
                 leida: false,
               });
@@ -157,10 +127,10 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
       if (madre.estado === 'vacia') {
         const ultimoCiclo = ciclos
           .filter(c => c.madreId === madre.id && c.estadoCiclo === 'finalizado')
-          .sort((a, b) => new Date(b.fechaDestete || 0).getTime() - new Date(a.fechaDestete || 0).getTime())[0];
+          .sort((a, b) => (b.fechaDestete || '').localeCompare(a.fechaDestete || ''))[0];
         
         if (ultimoCiclo?.fechaDestete) {
-          const diasDesdeDestete = Math.floor((hoy.getTime() - new Date(ultimoCiclo.fechaDestete).getTime()) / (1000 * 60 * 60 * 24));
+          const diasDesdeDestete = diasEntre(ultimoCiclo.fechaDestete, hoy);
           if (diasDesdeDestete >= 7) {
             const existe = alertas.some(a => a.tipo === 'lista_cruce' && a.madreId === madre.id);
             if (!existe) {
@@ -169,7 +139,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
                 tipo: 'lista_cruce',
                 madreId: madre.id,
                 mensaje: `${madre.arete} lista para nuevo cruce`,
-                fechaAlerta: hoy.toISOString().split('T')[0],
+                fechaAlerta: hoy,
                 prioridad: 'baja',
                 leida: false,
               });
@@ -190,15 +160,9 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     const enGestacion = activas.filter(m => m.estado === 'gestacion').length;
     const enLactancia = activas.filter(m => m.estado === 'lactancia').length;
     
-    const hoy = new Date();
-    const enUnaSemana = new Date();
-    enUnaSemana.setDate(hoy.getDate() + 7);
-    
-    const proximasParir = ciclos.filter(c => {
-      if (c.estadoCiclo !== 'gestacion' || !c.fechaPartoPrevista) return false;
-      const fechaParto = new Date(c.fechaPartoPrevista);
-      return fechaParto >= hoy && fechaParto <= enUnaSemana;
-    }).length;
+    const proximasParir = ciclos.filter(c =>
+      esProximaAParir(c) && activas.some(m => m.id === c.madreId)
+    ).length;
 
     const listasParaCruce = activas.filter(m => m.estado === 'vacia').length;
 
@@ -216,7 +180,8 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     const nuevaMadre: Madre = {
       ...datos,
       id: generarId(),
-      fechaRegistro: new Date().toISOString(),
+      fechaRegistro: hoyISO(),
+      registradoEn: new Date().toISOString(),
     };
     setMadres(prev => [...prev, nuevaMadre]);
     return nuevaMadre;
@@ -230,7 +195,8 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     setMadres(prev => prev.map(m => m.id === id ? {
       ...m,
       estado: 'descartada' as EstadoMadre,
-      fechaDescarte: new Date().toISOString(),
+      fechaDescarte: hoyISO(),
+      descartadoEn: new Date().toISOString(),
       motivoDescarte: motivo,
     } : m));
   }, []);
@@ -265,6 +231,29 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     
     return nuevoCiclo;
   }, [ciclos, actualizarMadre]);
+
+  const editarCruce = useCallback((cicloId: string, datosCruce: DatosCruce) => {
+    const ciclo = ciclos.find(c => c.id === cicloId);
+    if (!ciclo) return;
+
+    setCiclos(prev => prev.map(c => c.id !== cicloId ? c : {
+      ...c,
+      fechaCruce: datosCruce.fechaCruce,
+      tipoCruce: datosCruce.tipoCruce,
+      numeroVerraco: datosCruce.numeroVerraco,
+      intento: datosCruce.intento,
+      observacionesCruce: datosCruce.observaciones,
+      ...calcularFechasCiclo(datosCruce.fechaCruce),
+      fechaActualizacion: new Date().toISOString(),
+    }));
+
+    // Las alertas de fechas anteriores ya no valen; se regeneran con las nuevas.
+    if (ciclo.fechaCruce !== datosCruce.fechaCruce) {
+      setAlertas(prev => prev.filter(a =>
+        a.madreId !== ciclo.madreId || (a.tipo !== 'parto_proximo' && a.tipo !== 'destete_pendiente')
+      ));
+    }
+  }, [ciclos]);
 
   const registrarParto = useCallback((cicloId: string, datosParto: DatosParto) => {
     setCiclos(prev => prev.map(c => {
@@ -336,6 +325,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
       descartarMadre,
       obtenerMadre,
       iniciarCiclo,
+      editarCruce,
       registrarParto,
       registrarDestete,
       obtenerCiclosMadre,
