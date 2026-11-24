@@ -17,9 +17,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Baby, Calendar, Users, Check, Syringe, Pencil } from 'lucide-react';
+import { ArrowLeft, Baby, Calendar, Users, Check, Syringe, Pencil, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { Ciclo, TipoCruce } from '@/types';
+import { Ciclo, MOTIVOS_FALLO, MotivoFallo, TipoCruce } from '@/types';
 import { formatFecha as fmt, hoyISO, sumarDias } from '@/lib/fechas';
 
 const estadoLabels: Record<Ciclo['estadoCiclo'], string> = {
@@ -28,7 +28,7 @@ const estadoLabels: Record<Ciclo['estadoCiclo'], string> = {
   parto: 'Parto',
   lactancia: 'Lactancia',
   finalizado: 'Finalizado',
-  fallido: 'Fallido',
+  fallido: 'No preñó',
 };
 
 const Observaciones = ({ texto }: { texto?: string }) => texto ? (
@@ -41,7 +41,7 @@ const Observaciones = ({ texto }: { texto?: string }) => texto ? (
 const DetalleCicloPage = () => {
   const { id: madreId, cicloId } = useParams<{ id: string; cicloId: string }>();
   const navigate = useNavigate();
-  const { obtenerMadre, ciclos, editarCruce, registrarParto, registrarDestete } = useGranja();
+  const { obtenerMadre, ciclos, editarCruce, marcarFallido, registrarParto, registrarDestete } = useGranja();
   
   const madre = obtenerMadre(madreId!);
   const ciclo = ciclos.find(c => c.id === cicloId);
@@ -49,6 +49,12 @@ const DetalleCicloPage = () => {
   const [showPartoForm, setShowPartoForm] = useState(false);
   const [showDesteteForm, setShowDesteteForm] = useState(false);
   const [showEditarCruce, setShowEditarCruce] = useState(false);
+  const [showFallo, setShowFallo] = useState(false);
+  const [falloData, setFalloData] = useState({
+    fechaFallo: hoyISO(),
+    motivoFallo: 'repitio_celo' as MotivoFallo,
+    observaciones: '',
+  });
   const [cruceData, setCruceData] = useState({
     fechaCruce: '',
     tipoCruce: 'monta_natural' as TipoCruce,
@@ -122,6 +128,21 @@ const DetalleCicloPage = () => {
     setShowEditarCruce(false);
   };
 
+  const handleMarcarFallido = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!falloData.fechaFallo || falloData.fechaFallo < ciclo.fechaCruce || falloData.fechaFallo > hoyISO()) {
+      toast.error('La fecha debe estar entre el cruce y hoy');
+      return;
+    }
+    marcarFallido(ciclo.id, {
+      fechaFallo: falloData.fechaFallo,
+      motivoFallo: falloData.motivoFallo,
+      observaciones: falloData.observaciones.trim() || undefined,
+    });
+    toast.success(`Registrado. El próximo será el ${ciclo.intento + 1}° intento del ciclo #${ciclo.numeroCiclo}.`);
+    setShowFallo(false);
+  };
+
   const handleRegistrarParto = (e: React.FormEvent) => {
     e.preventDefault();
     if (partoData.nacidosTotales <= 0) {
@@ -177,7 +198,7 @@ const DetalleCicloPage = () => {
               <CardTitle>Ciclo #{ciclo.numeroCiclo}</CardTitle>
               <Badge>{estadoLabels[ciclo.estadoCiclo]}</Badge>
             </div>
-            <CardDescription>{madre.arete}</CardDescription>
+            <CardDescription>{madre.arete} · {ciclo.intento}° intento</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Datos de cruce */}
@@ -200,6 +221,21 @@ const DetalleCicloPage = () => {
               </div>
               <Observaciones texto={ciclo.observacionesCruce} />
             </div>
+
+            {/* Intento fallido */}
+            {ciclo.estadoCiclo === 'fallido' && (
+              <div className="p-3 bg-destructive/10 rounded-lg space-y-2">
+                <div className="flex items-center gap-2 font-medium text-destructive">
+                  <XCircle className="h-4 w-4" />
+                  No preñó
+                </div>
+                <div className="text-sm text-muted-foreground grid grid-cols-2 gap-2">
+                  <span>Fecha: {fmt(ciclo.fechaFallo)}</span>
+                  <span>Motivo: {ciclo.motivoFallo ? MOTIVOS_FALLO[ciclo.motivoFallo] : '—'}</span>
+                </div>
+                <Observaciones texto={ciclo.observacionesFallo} />
+              </div>
+            )}
 
             {/* Fechas calculadas */}
             <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg space-y-2">
@@ -276,10 +312,21 @@ const DetalleCicloPage = () => {
 
         {/* Botones de acción */}
         {ciclo.estadoCiclo === 'gestacion' && !showPartoForm && (
-          <Button size="lg" className="w-full h-14" onClick={() => setShowPartoForm(true)}>
-            <Baby className="h-5 w-5 mr-2" />
-            Registrar Parto
-          </Button>
+          <div className="space-y-2">
+            <Button size="lg" className="w-full h-14" onClick={() => setShowPartoForm(true)}>
+              <Baby className="h-5 w-5 mr-2" />
+              Registrar Parto
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="w-full h-12 text-destructive border-destructive/50"
+              onClick={() => setShowFallo(true)}
+            >
+              <XCircle className="h-5 w-5 mr-2" />
+              No preñó / repitió
+            </Button>
+          </div>
         )}
 
         {ciclo.estadoCiclo === 'lactancia' && !showDesteteForm && (
@@ -460,6 +507,67 @@ const DetalleCicloPage = () => {
           </Card>
         )}
       </div>
+
+      {/* No preñó */}
+      <Dialog open={showFallo} onOpenChange={setShowFallo}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>No preñó</DialogTitle>
+            <DialogDescription>
+              La madre queda vacía. El próximo cruce será el {ciclo.intento + 1}° intento del ciclo #{ciclo.numeroCiclo}.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleMarcarFallido} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Motivo</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {(Object.keys(MOTIVOS_FALLO) as MotivoFallo[]).map(motivo => (
+                  <Button
+                    key={motivo}
+                    type="button"
+                    variant={falloData.motivoFallo === motivo ? 'default' : 'outline'}
+                    onClick={() => setFalloData(prev => ({ ...prev, motivoFallo: motivo }))}
+                  >
+                    {MOTIVOS_FALLO[motivo]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="fechaFallo">Fecha en que se notó</Label>
+              <Input
+                id="fechaFallo"
+                type="date"
+                min={ciclo.fechaCruce}
+                max={hoyISO()}
+                value={falloData.fechaFallo}
+                onChange={(e) => setFalloData(prev => ({ ...prev, fechaFallo: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="obsFallo">Observaciones</Label>
+              <Textarea
+                id="obsFallo"
+                placeholder="Ej: repitió a los 21 días..."
+                value={falloData.observaciones}
+                onChange={(e) => setFalloData(prev => ({ ...prev, observaciones: e.target.value }))}
+                rows={2}
+              />
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowFallo(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="destructive">
+                Guardar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Editar cruce */}
       <Dialog open={showEditarCruce} onOpenChange={setShowEditarCruce}>

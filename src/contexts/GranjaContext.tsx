@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Madre, Ciclo, Alerta, EstadisticasDashboard, EstadoMadre, DatosCruce, DatosParto, DatosDestete } from '@/types';
+import { Madre, Ciclo, Alerta, EstadisticasDashboard, EstadoMadre, DatosCruce, DatosParto, DatosDestete, DatosFallo } from '@/types';
+import { ordenarCiclos, siguienteCiclo } from '@/lib/ciclos';
 import { calcularFechasCiclo, diasEntre, esProximaAParir, hoyISO, sumarDias } from '@/lib/fechas';
 import { cargarDatos, CLAVES, guardarLista } from '@/lib/datos';
 
@@ -19,6 +20,8 @@ interface GranjaContextType {
   // Acciones Ciclos
   iniciarCiclo: (madreId: string, datosCruce: DatosCruce) => Ciclo;
   editarCruce: (cicloId: string, datosCruce: DatosCruce) => void;
+  marcarFallido: (cicloId: string, datos: DatosFallo) => void;
+  proximoCiclo: (madreId: string) => { numeroCiclo: number; intento: number };
   registrarParto: (cicloId: string, datosParto: DatosParto) => void;
   registrarDestete: (cicloId: string, datosDestete: DatosDestete) => void;
   obtenerCiclosMadre: (madreId: string) => Ciclo[];
@@ -207,9 +210,8 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
 
   // Acciones Ciclos
   const iniciarCiclo = useCallback((madreId: string, datosCruce: DatosCruce): Ciclo => {
-    const ciclosMadre = ciclos.filter(c => c.madreId === madreId);
-    const numeroCiclo = ciclosMadre.length + 1;
-    
+    const { numeroCiclo } = siguienteCiclo(ciclos.filter(c => c.madreId === madreId));
+
     const fechas = calcularFechasCiclo(datosCruce.fechaCruce);
     const nuevoCiclo: Ciclo = {
       id: generarId(),
@@ -253,6 +255,26 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
         a.madreId !== ciclo.madreId || (a.tipo !== 'parto_proximo' && a.tipo !== 'destete_pendiente')
       ));
     }
+  }, [ciclos]);
+
+  const marcarFallido = useCallback((cicloId: string, datos: DatosFallo) => {
+    const ciclo = ciclos.find(c => c.id === cicloId);
+    if (!ciclo) return;
+
+    setCiclos(prev => prev.map(c => c.id !== cicloId ? c : {
+      ...c,
+      fechaFallo: datos.fechaFallo,
+      motivoFallo: datos.motivoFallo,
+      observacionesFallo: datos.observaciones,
+      estadoCiclo: 'fallido',
+      fechaActualizacion: new Date().toISOString(),
+    }));
+    setAlertas(prev => prev.filter(a => a.madreId !== ciclo.madreId || a.tipo !== 'parto_proximo'));
+    actualizarMadre(ciclo.madreId, { estado: 'vacia' });
+  }, [ciclos, actualizarMadre]);
+
+  const proximoCiclo = useCallback((madreId: string) => {
+    return siguienteCiclo(ciclos.filter(c => c.madreId === madreId));
   }, [ciclos]);
 
   const registrarParto = useCallback((cicloId: string, datosParto: DatosParto) => {
@@ -300,9 +322,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
   }, [ciclos, actualizarMadre]);
 
   const obtenerCiclosMadre = useCallback((madreId: string) => {
-    return ciclos
-      .filter(c => c.madreId === madreId)
-      .sort((a, b) => b.numeroCiclo - a.numeroCiclo);
+    return ordenarCiclos(ciclos.filter(c => c.madreId === madreId));
   }, [ciclos]);
 
   const obtenerCicloActual = useCallback((madreId: string) => {
@@ -326,6 +346,8 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
       obtenerMadre,
       iniciarCiclo,
       editarCruce,
+      marcarFallido,
+      proximoCiclo,
       registrarParto,
       registrarDestete,
       obtenerCiclosMadre,

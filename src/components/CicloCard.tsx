@@ -1,8 +1,9 @@
 import { cn } from '@/lib/utils';
 import { Ciclo } from '@/types';
-import { Calendar, Baby, Users } from 'lucide-react';
+import { Calendar, Baby, Users, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatFecha } from '@/lib/fechas';
+import { MOTIVOS_FALLO } from '@/types';
 
 interface CicloCardProps {
   ciclo: Ciclo;
@@ -15,7 +16,7 @@ const estadoLabels: Record<Ciclo['estadoCiclo'], string> = {
   parto: 'Parto',
   lactancia: 'Lactancia',
   finalizado: 'Finalizado',
-  fallido: 'Fallido',
+  fallido: 'No preñó',
 };
 
 const estadoVariants: Record<Ciclo['estadoCiclo'], 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -37,7 +38,10 @@ export function CicloCard({ ciclo, onClick }: CicloCardProps) {
       )}
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="font-semibold text-foreground">Ciclo #{ciclo.numeroCiclo}</span>
+        <span className="font-semibold text-foreground">
+          Ciclo #{ciclo.numeroCiclo}
+          <span className="font-normal text-muted-foreground"> · {ciclo.intento}° intento</span>
+        </span>
         <Badge variant={estadoVariants[ciclo.estadoCiclo]}>
           {estadoLabels[ciclo.estadoCiclo]}
         </Badge>
@@ -49,6 +53,16 @@ export function CicloCard({ ciclo, onClick }: CicloCardProps) {
           <span>Cruce: {formatFecha(ciclo.fechaCruce)}</span>
         </div>
         
+        {ciclo.estadoCiclo === 'fallido' && (
+          <div className="flex items-center gap-2 text-destructive">
+            <XCircle className="h-4 w-4 flex-shrink-0" />
+            <span>
+              {ciclo.motivoFallo ? MOTIVOS_FALLO[ciclo.motivoFallo] : 'No preñó'}
+              {ciclo.fechaFallo && `: ${formatFecha(ciclo.fechaFallo)}`}
+            </span>
+          </div>
+        )}
+
         {ciclo.fechaPartoReal && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Baby className="h-4 w-4" />

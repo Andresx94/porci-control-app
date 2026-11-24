@@ -1,5 +1,8 @@
-import { Alerta, Ciclo, Madre, TipoCruce } from '@/types';
+import { Alerta, Ciclo, Madre, MotivoFallo, TipoCruce } from '@/types';
 import { calcularFechasCiclo, sumarDias } from '@/lib/fechas';
+
+// Subir este número cuando cambien los datos de ejemplo, para que se regeneren.
+export const VERSION_DEMO = '2';
 
 export interface DatosGranja {
   madres: Madre[];
@@ -31,7 +34,7 @@ export function crearDatosDemo(hoy: string): DatosGranja {
     tipoCruce: TipoCruce,
     extra: Partial<Ciclo> = {},
   ): Ciclo => ({
-    id: `demo-${arete}-c${numeroCiclo}`,
+    id: `demo-${arete}-c${numeroCiclo}${extra.intento && extra.intento > 1 ? `i${extra.intento}` : ''}`,
     madreId: `demo-${arete}`,
     numeroCiclo,
     fechaCruce: hace(diasCruce),
@@ -52,6 +55,12 @@ export function crearDatosDemo(hoy: string): DatosGranja {
     nacidosMuertos: muertos,
     momias,
     observacionesParto,
+  });
+
+  const fallo = (diasFallo: number, motivoFallo: MotivoFallo, observacionesFallo?: string): Partial<Ciclo> => ({
+    fechaFallo: hace(diasFallo),
+    motivoFallo,
+    observacionesFallo,
   });
 
   const destete = (diasDestete: number, destetados: number, muertesLactancia: number, pesoNacimiento: number, pesoDestete: number, observacionesDestete?: string): Partial<Ciclo> => ({
@@ -77,6 +86,7 @@ export function crearDatosDemo(hoy: string): DatosGranja {
       madre('61', 'gestacion', 180, 470),
       madre('104', 'gestacion', 120, 390, { areteMadre: '9', observaciones: 'Primer cruce.' }),
       madre('B-12', 'gestacion', 95, 360),
+      madre('143(172-1)', 'gestacion', 500, 1060, { areteMadre: 'F2', aretePadre: '6724', observaciones: 'En el ciclo 2 estaba vacía cuando le tocaba parir.' }),
       // En lactancia
       madre('14', 'lactancia', 350, 780),
       madre('A12', 'lactancia', 330, 740, { aretePadre: 'Duroc grande' }),
@@ -106,9 +116,15 @@ export function crearDatosDemo(hoy: string): DatosGranja {
       ciclo('9', 2, 112, 'gestacion', 'Duroc grande', 'monta_natural'),
       // Gestaciones recientes, con partos futuros
       ciclo('M-07', 1, 60, 'gestacion', '33-47', 'inseminacion'),
-      ciclo('55', 1, 30, 'gestacion', 'Canelo', 'monta_natural'),
-      ciclo('48', 1, 40, 'fallido', 'Canelo', 'monta_natural', { observacionesCruce: 'Repitió celo a los 21 días.' }),
-      ciclo('48', 2, 14, 'gestacion', 'Canelo', 'monta_natural', { intento: 2 }),
+      ciclo('55', 1, 95, 'fallido', 'Canelo', 'monta_natural', fallo(50, 'aborto', 'Abortó a los 45 días.')),
+      ciclo('55', 1, 30, 'gestacion', 'Canelo', 'monta_natural', { intento: 2 }),
+      ciclo('48', 1, 40, 'fallido', 'Canelo', 'monta_natural', fallo(19, 'repitio_celo', 'Repitió celo a los 21 días.')),
+      ciclo('48', 1, 14, 'gestacion', 'Canelo', 'monta_natural', { intento: 2 }),
+      // Como en el cuaderno: 1, 2 (vacía al parto), 2(2), 3
+      ciclo('143(172-1)', 1, 425, 'finalizado', '404-404', 'inseminacion', { ...parto(310, 10, 1, 0), ...destete(282, 9, 1, 1.36, 6.9) }),
+      ciclo('143(172-1)', 2, 270, 'fallido', '404-404', 'inseminacion', fallo(155, 'vacia_al_parto', 'Estaba vacía cuando le tocaba parir.')),
+      ciclo('143(172-1)', 2, 152, 'finalizado', 'P-P', 'monta_natural', { intento: 2, ...parto(37, 11, 0, 0), ...destete(9, 10, 1, 1.4, 7.2) }),
+      ciclo('143(172-1)', 3, 2, 'gestacion', '44-44', 'inseminacion'),
       ciclo('61', 1, 7, 'gestacion', '33-47', 'inseminacion'),
       ciclo('104', 1, 3, 'gestacion', 'Duroc grande', 'monta_natural', { observacionesCruce: 'Monta tranquila.' }),
       ciclo('B-12', 1, 2, 'gestacion', '33-47', 'inseminacion'),
@@ -125,8 +141,8 @@ export function crearDatosDemo(hoy: string): DatosGranja {
       ciclo('33', 1, 150, 'finalizado', 'Canelo', 'monta_natural', { ...parto(35, 10, 0, 0), ...destete(5, 10, 0, 1.37, 7.0) }), // siguiente monta hoy
       // Descartadas
       ciclo('D9', 1, 330, 'finalizado', 'Canelo', 'monta_natural', { ...parto(215, 6, 2, 1), ...destete(187, 5, 1, 1.2, 5.8) }),
-      ciclo('D3', 1, 65, 'fallido', 'Canelo', 'monta_natural', { observacionesCruce: 'No quedó preñada.' }),
-      ciclo('D3', 2, 30, 'fallido', 'Canelo', 'monta_natural', { intento: 2, observacionesCruce: 'Volvió a repetir celo.' }),
+      ciclo('D3', 1, 65, 'fallido', 'Canelo', 'monta_natural', fallo(44, 'repitio_celo', 'No quedó preñada.')),
+      ciclo('D3', 1, 30, 'fallido', 'Canelo', 'monta_natural', { intento: 2, ...fallo(9, 'repitio_celo', 'Volvió a repetir celo.') }),
     ],
     alertas: [],
   };

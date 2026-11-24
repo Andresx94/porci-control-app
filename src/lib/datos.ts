@@ -1,6 +1,6 @@
 import { Alerta, Ciclo, Madre } from '@/types';
 import { aFechaPura, diaLocal, hoyISO } from '@/lib/fechas';
-import { crearDatosDemo, DatosGranja } from '@/lib/demo';
+import { crearDatosDemo, DatosGranja, VERSION_DEMO } from '@/lib/demo';
 
 export const CLAVES = {
   MADRES: 'granja_madres',
@@ -11,6 +11,7 @@ export const CLAVES = {
 const CLAVE_RESPALDO = 'granja_respaldo_antes_fechas';
 const PREFIJO_DEMO = 'demo_';
 const CLAVE_DIA_DEMO = `${PREFIJO_DEMO}dia`;
+const CLAVE_VERSION_DEMO = `${PREFIJO_DEMO}version`;
 
 // La app abre en demo. Los datos reales siguen en sus claves de siempre y solo se
 // usan con ?real=1; la demo guarda todo con el prefijo demo_.
@@ -38,6 +39,7 @@ const CAMPOS_CICLO = [
   'fechaSiguienteMonta',
   'fechaPartoReal',
   'fechaDestete',
+  'fechaFallo',
 ] as const;
 
 const normalizar = <T extends object>(obj: T, campos: readonly (keyof T)[]): T => {
@@ -103,8 +105,9 @@ function cargarDemo(): DatosGranja {
     const guardados = leerDatos();
 
     // Una demo sin tocar se actualiza al día de hoy; una editada se respeta hasta el reset.
-    let regenerar = !dia;
-    if (dia && dia !== hoy) {
+    // Si cambian los datos de ejemplo de la app, la demo se vuelve a generar.
+    let regenerar = !dia || localStorage.getItem(CLAVE_VERSION_DEMO) !== VERSION_DEMO;
+    if (!regenerar && dia && dia !== hoy) {
       const base = crearDatosDemo(dia);
       regenerar = JSON.stringify([guardados.madres, guardados.ciclos]) === JSON.stringify([base.madres, base.ciclos]);
     }
@@ -113,6 +116,7 @@ function cargarDemo(): DatosGranja {
     const nuevos = crearDatosDemo(hoy);
     escribirDatos(nuevos);
     localStorage.setItem(CLAVE_DIA_DEMO, hoy);
+    localStorage.setItem(CLAVE_VERSION_DEMO, VERSION_DEMO);
     return nuevos;
   } catch {
     return crearDatosDemo(hoy);

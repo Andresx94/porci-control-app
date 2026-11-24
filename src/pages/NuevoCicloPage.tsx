@@ -16,16 +16,16 @@ import { hoyISO } from '@/lib/fechas';
 const NuevoCicloPage = () => {
   const { id: madreId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { obtenerMadre, obtenerCiclosMadre, iniciarCiclo } = useGranja();
-  
+  const { obtenerMadre, proximoCiclo, iniciarCiclo } = useGranja();
+
   const madre = obtenerMadre(madreId!);
-  const ciclosAnteriores = obtenerCiclosMadre(madreId!);
-  
+  const proximo = proximoCiclo(madreId!);
+
   const [formData, setFormData] = useState({
     fechaCruce: hoyISO(),
     tipoCruce: 'monta_natural' as TipoCruce,
     numeroVerraco: '',
-    intento: 1,
+    intento: proximo.intento,
     observaciones: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,7 +83,10 @@ const NuevoCicloPage = () => {
         <Card>
           <CardHeader>
             <CardTitle>Nuevo Ciclo - {madre.arete}</CardTitle>
-            <CardDescription>Este será el ciclo #{ciclosAnteriores.length + 1}</CardDescription>
+            <CardDescription>
+              Ciclo #{proximo.numeroCiclo} · {formData.intento}° intento
+              {proximo.intento > 1 && ' (el intento anterior no preñó)'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -134,7 +137,7 @@ const NuevoCicloPage = () => {
               <div className="space-y-3">
                 <Label>Número de Intento</Label>
                 <div className="flex gap-2">
-                  {[1, 2, 3].map(num => (
+                  {Array.from({ length: Math.max(3, proximo.intento) }, (_, i) => i + 1).map(num => (
                     <Button
                       key={num}
                       type="button"

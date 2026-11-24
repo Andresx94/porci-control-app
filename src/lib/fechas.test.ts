@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { Ciclo, Madre } from '@/types';
 import { calcularFechasCiclo, diaLocal, diasEntre, esFechaPura, formatFecha, sumarDias } from '@/lib/fechas';
 import { borrarDatos, cargarDatos, CLAVES, guardarLista, migrarDatos } from '@/lib/datos';
-import { crearDatosDemo } from '@/lib/demo';
+import { crearDatosDemo, VERSION_DEMO } from '@/lib/demo';
+import { siguienteCiclo } from '@/lib/ciclos';
 
 const usarDemo = (activa: boolean) => window.history.replaceState(null, '', activa ? '/' : '/?real=1');
 
@@ -84,6 +85,7 @@ describe(`fechas en ${process.env.TZ ?? 'zona del sistema'}`, () => {
     usarDemo(true);
     const base = crearDatosDemo('2026-01-10');
     localStorage.setItem('demo_dia', '2026-01-10');
+    localStorage.setItem('demo_version', VERSION_DEMO);
     localStorage.setItem(`demo_${CLAVES.MADRES}`, JSON.stringify(base.madres));
     localStorage.setItem(`demo_${CLAVES.CICLOS}`, JSON.stringify(base.ciclos));
     expect(cargarDatos().madres[0].fechaRegistro).not.toBe(base.madres[0].fechaRegistro);
@@ -93,6 +95,15 @@ describe(`fechas en ${process.env.TZ ?? 'zona del sistema'}`, () => {
     localStorage.setItem(`demo_${CLAVES.MADRES}`, JSON.stringify(editadas));
     localStorage.setItem(`demo_${CLAVES.CICLOS}`, JSON.stringify(base.ciclos));
     expect(cargarDatos().madres[0].arete).toBe('EDITADA');
+  });
+
+  it('después de un intento fallido sigue el mismo ciclo con el intento siguiente', () => {
+    const c = (numeroCiclo: number, intento: number, estadoCiclo: Ciclo['estadoCiclo']) => ({ numeroCiclo, intento, estadoCiclo }) as Ciclo;
+    expect(siguienteCiclo([])).toEqual({ numeroCiclo: 1, intento: 1 });
+    expect(siguienteCiclo([c(1, 1, 'finalizado')])).toEqual({ numeroCiclo: 2, intento: 1 });
+    expect(siguienteCiclo([c(1, 1, 'finalizado'), c(2, 1, 'fallido')])).toEqual({ numeroCiclo: 2, intento: 2 });
+    expect(siguienteCiclo([c(2, 1, 'fallido'), c(2, 2, 'fallido'), c(1, 1, 'finalizado')])).toEqual({ numeroCiclo: 2, intento: 3 });
+    expect(siguienteCiclo([c(2, 1, 'fallido'), c(2, 2, 'finalizado')])).toEqual({ numeroCiclo: 3, intento: 1 });
   });
 
   it('la demo tiene ciclos coherentes', () => {
@@ -106,6 +117,7 @@ describe(`fechas en ${process.env.TZ ?? 'zona del sistema'}`, () => {
       expect(c.fechaCruce <= '2026-03-08').toBe(true);
       if (c.fechaPartoReal) expect(c.fechaCruce < c.fechaPartoReal).toBe(true);
       if (c.fechaDestete) expect(c.fechaPartoReal! < c.fechaDestete).toBe(true);
+      if (c.estadoCiclo === 'fallido') expect(c.fechaFallo! > c.fechaCruce && !!c.motivoFallo).toBe(true);
     });
     madres.filter(m => m.estado === 'gestacion' || m.estado === 'lactancia').forEach(m => {
       expect(ciclos.filter(c => c.madreId === m.id && c.estadoCiclo === m.estado)).toHaveLength(1);
@@ -114,7 +126,7 @@ describe(`fechas en ${process.env.TZ ?? 'zona del sistema'}`, () => {
 
   it('la demo solo usa fechas puras y cubre todos los estados', () => {
     const { madres, ciclos } = crearDatosDemo('2026-03-08');
-    const campos = ['fechaCruce', 'fechaPartoPrevista', 'fechaVacunaSuicen', 'fechaEnjaule', 'fechaDestetePrevista', 'fechaSiguienteMonta', 'fechaPartoReal', 'fechaDestete'] as const;
+    const campos = ['fechaCruce', 'fechaPartoPrevista', 'fechaVacunaSuicen', 'fechaEnjaule', 'fechaDestetePrevista', 'fechaSiguienteMonta', 'fechaPartoReal', 'fechaDestete', 'fechaFallo'] as const;
     ciclos.forEach(c => campos.forEach(campo => { if (c[campo]) expect(esFechaPura(c[campo])).toBe(true); }));
     madres.forEach(m => expect(esFechaPura(m.fechaRegistro)).toBe(true));
     expect(new Set(madres.map(m => m.estado))).toEqual(new Set(['activa', 'gestacion', 'lactancia', 'vacia', 'descartada']));

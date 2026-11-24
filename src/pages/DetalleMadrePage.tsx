@@ -110,7 +110,7 @@ const DetalleMadrePage = () => {
             {(madre.areteMadre || madre.aretePadre) && (
               <div className="text-sm text-muted-foreground grid grid-cols-2 gap-2">
                 {madre.areteMadre && <span>Arete de la madre: {madre.areteMadre}</span>}
-                {madre.aretePadre && <span>Verraco: {madre.aretePadre}</span>}
+                {madre.aretePadre && <span>Padre: {madre.aretePadre}</span>}
               </div>
             )}
             {madre.observaciones && (
@@ -119,7 +119,10 @@ const DetalleMadrePage = () => {
               </p>
             )}
             <div className="text-sm font-medium">
-              Total ciclos: {ciclos.length}
+              Total ciclos: {new Set(ciclos.map(c => c.numeroCiclo)).size}
+              {ciclos.length > new Set(ciclos.map(c => c.numeroCiclo)).size && (
+                <span className="font-normal text-muted-foreground"> ({ciclos.length} intentos)</span>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -102,7 +102,7 @@ const NuevaMadrePage = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="aretePadre">Verraco</Label>
+                  <Label htmlFor="aretePadre">Padre</Label>
                   <Input
                     id="aretePadre"
                     placeholder="Nombre o referencia"

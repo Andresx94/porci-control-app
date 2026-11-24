@@ -6,6 +6,15 @@ export type EstadoCiclo = 'cruce' | 'gestacion' | 'parto' | 'lactancia' | 'final
 
 export type TipoCruce = 'monta_natural' | 'inseminacion';
 
+export type MotivoFallo = 'repitio_celo' | 'vacia_al_parto' | 'aborto' | 'otro';
+
+export const MOTIVOS_FALLO: Record<MotivoFallo, string> = {
+  repitio_celo: 'Repitió celo',
+  vacia_al_parto: 'Vacía al parto',
+  aborto: 'Aborto',
+  otro: 'Otro',
+};
+
 export interface Madre {
   id: string;
   arete: string;
@@ -52,6 +61,10 @@ export interface Ciclo {
   pesoPromedioNacimiento?: number;
   pesoPromedioDestete?: number;
   observacionesDestete?: string;
+  // Intento fallido: no quedó preñada
+  fechaFallo?: string;
+  motivoFallo?: MotivoFallo;
+  observacionesFallo?: string;
   // Estado
   estadoCiclo: EstadoCiclo;
   fechaCreacion: string;          // Instante real (ISO con hora)
@@ -92,6 +105,12 @@ export interface DatosParto {
   nacidosVivos: number;
   nacidosMuertos: number;
   momias: number;
+  observaciones?: string;
+}
+
+export interface DatosFallo {
+  fechaFallo: string;
+  motivoFallo: MotivoFallo;
   observaciones?: string;
 }
 

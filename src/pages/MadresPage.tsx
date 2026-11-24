@@ -63,7 +63,9 @@ const MadresPage = () => {
     const ciclos = obtenerCiclosMadre(madreId);
     if (ciclos.length === 0) return 'Sin ciclos registrados';
     const ultimo = ciclos[0];
-    return `Ciclo #${ultimo.numeroCiclo} - ${ultimo.estadoCiclo}`;
+    const intento = ultimo.intento > 1 ? ` (${ultimo.intento}° intento)` : '';
+    const estado = ultimo.estadoCiclo === 'fallido' ? 'no preñó' : ultimo.estadoCiclo;
+    return `Ciclo #${ultimo.numeroCiclo}${intento} - ${estado}`;
   };
 
   return (
