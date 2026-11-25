@@ -15,7 +15,7 @@ const FILTROS = [
   { value: 'todas', label: 'Todas' },
   { value: 'gestacion', label: 'Gestación' },
   { value: 'proximas', label: 'Próximas a parir' },
-  { value: 'lactancia', label: 'Lactancia' },
+  { value: 'lactancia', label: 'Maternidad' },
   { value: 'vacia', label: 'Vacías' },
 ];
 

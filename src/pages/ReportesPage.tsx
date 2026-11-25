@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageLayout } from '@/components/PageLayout';
 import { useGranja } from '@/contexts/GranjaContext';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, TrendingUp, TrendingDown, Users } from 'lucide-react';
+import { BarChart3, CalendarSearch, TrendingUp, TrendingDown, Users } from 'lucide-react';
 
 const ReportesPage = () => {
+  const navigate = useNavigate();
   const { madres, ciclos } = useGranja();
 
   const reportes = useMemo(() => {
@@ -69,6 +72,11 @@ const ReportesPage = () => {
   return (
     <PageLayout title="Reportes">
       <div className="p-4 space-y-4">
+        <Button size="lg" className="w-full h-14" onClick={() => navigate('/reportes/fechas')}>
+          <CalendarSearch className="h-5 w-5 mr-2" />
+          Buscar por fechas y exportar
+        </Button>
+
         {/* Resumen general */}
         <Card>
           <CardHeader className="pb-2">

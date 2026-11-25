@@ -133,6 +133,14 @@ const Dashboard = () => {
             >
               Ver Reportes
             </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-14 col-span-2"
+              onClick={() => navigate('/reportes/fechas')}
+            >
+              Buscar por fechas y exportar
+            </Button>
           </div>
         </section>
       </div>

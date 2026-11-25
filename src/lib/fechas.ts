@@ -58,6 +58,12 @@ export function diasEntre(desde: string, hasta: string): number {
   return aDiasUTC(hasta) - aDiasUTC(desde);
 }
 
+// Primer día del mes de `fecha`, desplazado `meses` (0 = ese mes, 1 = el siguiente).
+export function inicioMes(fecha: string, meses = 0): string {
+  const [anio, mes] = fecha.split('-').map(Number);
+  return new Date(Date.UTC(anio, mes - 1 + meses, 1)).toISOString().slice(0, 10);
+}
+
 export function calcularFechasCiclo(fechaCruce: string) {
   const fechaPartoPrevista = sumarDias(fechaCruce, 115);
   const fechaDestetePrevista = sumarDias(fechaPartoPrevista, 30);

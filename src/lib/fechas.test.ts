@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Ciclo, Madre } from '@/types';
-import { calcularFechasCiclo, diaLocal, diasEntre, esFechaPura, formatFecha, sumarDias } from '@/lib/fechas';
+import { calcularFechasCiclo, diaLocal, diasEntre, esFechaPura, formatFecha, inicioMes, sumarDias } from '@/lib/fechas';
+import { tablaACsv } from '@/lib/exportar';
 import { borrarDatos, cargarDatos, CLAVES, guardarLista, migrarDatos } from '@/lib/datos';
 import { crearDatosDemo, VERSION_DEMO } from '@/lib/demo';
 import { siguienteCiclo } from '@/lib/ciclos';
@@ -25,6 +26,20 @@ describe(`fechas en ${process.env.TZ ?? 'zona del sistema'}`, () => {
     expect(sumarDias('2026-10-24', 2)).toBe('2026-10-26');
     expect(sumarDias('2026-12-31', 1)).toBe('2027-01-01');
     expect(diasEntre('2026-03-01', '2026-04-01')).toBe(31);
+  });
+
+  it('calcula inicios de mes para los rangos', () => {
+    expect(inicioMes('2026-11-25')).toBe('2026-11-01');
+    expect(inicioMes('2026-11-25', 1)).toBe('2026-12-01');
+    expect(inicioMes('2026-12-31', 1)).toBe('2027-01-01');
+    expect(inicioMes('2026-01-15', -1)).toBe('2025-12-01');
+    expect(sumarDias(inicioMes('2028-02-10', 1), -1)).toBe('2028-02-29');
+  });
+
+  it('exporta CSV que Excel en español abre bien', () => {
+    const csv = tablaACsv({ columnas: ['Arete', 'Nota'], filas: [['25(6-3)', 'uno; dos'], ['A1', 'dijo "sí"']] });
+    expect(csv.startsWith('﻿')).toBe(true);
+    expect(csv.slice(1).split('\r\n')).toEqual(['Arete;Nota', '25(6-3);"uno; dos"', 'A1;"dijo ""sí"""']);
   });
 
   it('calcula las fechas del ciclo', () => {

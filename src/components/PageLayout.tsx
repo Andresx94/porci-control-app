@@ -11,7 +11,7 @@ interface PageLayoutProps {
 export function PageLayout({ children, title }: PageLayoutProps) {
   return (
     <div className="min-h-screen bg-background pb-20">
-      <div className="sticky top-0 z-40">
+      <div className="sticky top-0 z-40 print:hidden">
         <DemoBanner />
         {title && (
           <header className="bg-primary text-primary-foreground safe-top">

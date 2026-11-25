@@ -12,6 +12,7 @@ import NuevoCicloPage from "./pages/NuevoCicloPage";
 import DetalleCicloPage from "./pages/DetalleCicloPage";
 import AlertasPage from "./pages/AlertasPage";
 import ReportesPage from "./pages/ReportesPage";
+import FechasPage from "./pages/FechasPage";
 import AjustesPage from "./pages/AjustesPage";
 import NotFound from "./pages/NotFound";
 
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/madres/:id/ciclo/:cicloId" element={<DetalleCicloPage />} />
             <Route path="/alertas" element={<AlertasPage />} />
             <Route path="/reportes" element={<ReportesPage />} />
+            <Route path="/reportes/fechas" element={<FechasPage />} />
             <Route path="/ajustes" element={<AjustesPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
