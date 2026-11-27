@@ -1,8 +1,27 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Madre, Ciclo, Alerta, EstadisticasDashboard, EstadoMadre, DatosCruce, DatosParto, DatosDestete, DatosFallo } from '@/types';
 import { ordenarCiclos, siguienteCiclo } from '@/lib/ciclos';
 import { calcularFechasCiclo, diasEntre, esProximaAParir, hoyISO, sumarDias } from '@/lib/fechas';
-import { cargarDatos, CLAVES, guardarLista } from '@/lib/datos';
+import { cargarDatos, CLAVES, contarPendientes, Conflicto, esDemo, guardarLista, leerConflictos } from '@/lib/datos';
+import { generarUuid } from '@/lib/utils';
+import { hayNube, supabase } from '@/lib/supabase';
+import { ErrorRed, sincronizar } from '@/lib/sincronizacion';
+import {
+  elegirGranjaGuardada,
+  granjaElegida,
+  granjasDelUsuario,
+  GranjaUsuario,
+  iniciarSesion,
+  cerrarSesion,
+  remotoSupabase,
+  resolverGranja,
+  usuarioActual,
+} from '@/lib/remotoSupabase';
+
+export type EstadoNube = 'apagada' | 'sin_sesion' | 'sincronizando' | 'al_dia' | 'sin_conexion' | 'error';
+
+const INTERVALO_SYNC_MS = 60_000;
+const ESPERA_SYNC_MS = 3_000;
 
 interface GranjaContextType {
   // Datos
@@ -32,6 +51,22 @@ interface GranjaContextType {
   
   // Loading
   isLoading: boolean;
+
+  // Nube (apagada si no hay configuración o estamos en demo)
+  estadoNube: EstadoNube;
+  pendientes: number;
+  conflictos: Conflicto[];
+  sincronizarAhora: () => Promise<void>;
+  correoNube: string | null;
+  // false mientras se lee la sesion guardada al arrancar (evita el parpadeo del login)
+  sesionComprobada: boolean;
+  // true cuando la lista de granjas se leyo bien (puede estar vacia)
+  granjasCargadas: boolean;
+  granjasNube: GranjaUsuario[];
+  granjaNubeId: string | null;
+  elegirGranjaNube: (id: string) => void;
+  entrarNube: (email: string, password: string) => Promise<void>;
+  salirNube: () => Promise<void>;
 }
 
 const GranjaContext = createContext<GranjaContextType | undefined>(undefined);
@@ -157,6 +192,143 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     }
   }, [madres, ciclos, isLoading]);
 
+  // ---------------------------------------------------------------- nube
+  const nubeActiva = !esDemo() && hayNube();
+  const [estadoNube, setEstadoNube] = useState<EstadoNube>(nubeActiva ? 'sin_sesion' : 'apagada');
+  const [pendientes, setPendientes] = useState(0);
+  const [conflictos, setConflictos] = useState<Conflicto[]>([]);
+  const [correoNube, setCorreoNube] = useState<string | null>(null);
+  const [sesionComprobada, setSesionComprobada] = useState(!nubeActiva);
+  const [granjasCargadas, setGranjasCargadas] = useState(false);
+  const [granjasNube, setGranjasNube] = useState<GranjaUsuario[]>([]);
+  const [granjaNubeId, setGranjaNubeId] = useState<string | null>(() => (nubeActiva ? granjaElegida() : null));
+  const granjaRef = useRef<string | null>(null);
+  const sesionRef = useRef(false);
+  const corriendo = useRef(false);
+
+  const refrescarCola = useCallback(() => {
+    if (!nubeActiva) return;
+    setPendientes(contarPendientes());
+    setConflictos(leerConflictos());
+  }, [nubeActiva]);
+
+  const sincronizarAhora = useCallback(async () => {
+    const granja = granjaRef.current;
+    if (!nubeActiva || !sesionRef.current || !granja || corriendo.current) return;
+    corriendo.current = true;
+    setEstadoNube('sincronizando');
+    try {
+      const r = await sincronizar(remotoSupabase, granja);
+      if (r.cambiosLocales) {
+        // Lo bajado ya está en localStorage; recargar no re-encola porque no hay diferencia.
+        const datos = cargarDatos();
+        setMadres(datos.madres);
+        setCiclos(datos.ciclos);
+      }
+      setEstadoNube('al_dia');
+    } catch (error) {
+      console.error('Error sincronizando:', error);
+      setEstadoNube(error instanceof ErrorRed || !navigator.onLine ? 'sin_conexion' : 'error');
+    } finally {
+      corriendo.current = false;
+      refrescarCola();
+    }
+  }, [nubeActiva, refrescarCola]);
+
+  // Sesión guardada en el dispositivo y cambios de sesión
+  useEffect(() => {
+    if (!nubeActiva || !supabase) return;
+    let vivo = true;
+    usuarioActual()
+      .then(u => vivo && setCorreoNube(u ? u.email : null))
+      .catch(() => {})
+      .finally(() => vivo && setSesionComprobada(true));
+    const { data } = supabase.auth.onAuthStateChange((_evento, sesion) => {
+      setCorreoNube(sesion?.user?.email ?? null);
+      setSesionComprobada(true);
+    });
+    return () => {
+      vivo = false;
+      data.subscription.unsubscribe();
+    };
+  }, [nubeActiva]);
+
+  // Granjas del usuario (si no hay red se conserva la granja elegida antes)
+  useEffect(() => {
+    sesionRef.current = correoNube !== null;
+    if (!nubeActiva) return;
+    if (correoNube === null) {
+      setGranjasNube([]);
+      setGranjasCargadas(false);
+      setEstadoNube('sin_sesion');
+      return;
+    }
+    let vivo = true;
+    granjasDelUsuario()
+      .then(lista => {
+        if (!vivo) return;
+        setGranjasNube(lista);
+        setGranjasCargadas(true);
+        const id = resolverGranja(lista, granjaElegida());
+        if (id) {
+          elegirGranjaGuardada(id);
+          setGranjaNubeId(id);
+        }
+      })
+      .catch(error => console.error('Error leyendo granjas:', error));
+    return () => {
+      vivo = false;
+    };
+  }, [nubeActiva, correoNube]);
+
+  useEffect(() => {
+    granjaRef.current = granjaNubeId;
+  }, [granjaNubeId]);
+
+  // Al cargar, al volver la señal y cada minuto
+  useEffect(() => {
+    if (!nubeActiva || isLoading || !correoNube || !granjaNubeId) return;
+    granjaRef.current = granjaNubeId;
+    sesionRef.current = true;
+    sincronizarAhora();
+    const alVolver = () => {
+      sincronizarAhora();
+    };
+    window.addEventListener('online', alVolver);
+    const timer = window.setInterval(alVolver, INTERVALO_SYNC_MS);
+    return () => {
+      window.removeEventListener('online', alVolver);
+      window.clearInterval(timer);
+    };
+  }, [nubeActiva, isLoading, correoNube, granjaNubeId, sincronizarAhora]);
+
+  // 3 s después de cualquier cambio local
+  useEffect(() => {
+    if (!nubeActiva || isLoading) return;
+    refrescarCola();
+    if (!correoNube || !granjaNubeId) return;
+    const timer = window.setTimeout(() => {
+      if (contarPendientes() > 0) sincronizarAhora();
+    }, ESPERA_SYNC_MS);
+    return () => window.clearTimeout(timer);
+  }, [madres, ciclos, nubeActiva, isLoading, correoNube, granjaNubeId, sincronizarAhora, refrescarCola]);
+
+  const elegirGranjaNube = useCallback((id: string) => {
+    elegirGranjaGuardada(id);
+    setGranjaNubeId(id);
+  }, []);
+
+  const entrarNube = useCallback(async (email: string, password: string) => {
+    await iniciarSesion(email, password);
+  }, []);
+
+  const salirNube = useCallback(async () => {
+    await cerrarSesion();
+    setCorreoNube(null);
+    // Vuelve a la URL base sin parametros: login (modo real con nube)
+    window.location.replace(import.meta.env.BASE_URL);
+  }, []);
+
   // Calcular estadísticas
   const estadisticas: EstadisticasDashboard = React.useMemo(() => {
     const activas = madres.filter(m => m.estado !== 'descartada');
@@ -182,7 +354,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
   const agregarMadre = useCallback((datos: Omit<Madre, 'id' | 'fechaRegistro'>): Madre => {
     const nuevaMadre: Madre = {
       ...datos,
-      id: generarId(),
+      id: generarUuid(),
       fechaRegistro: hoyISO(),
       registradoEn: new Date().toISOString(),
     };
@@ -214,7 +386,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
 
     const fechas = calcularFechasCiclo(datosCruce.fechaCruce);
     const nuevoCiclo: Ciclo = {
-      id: generarId(),
+      id: generarUuid(),
       madreId,
       numeroCiclo,
       fechaCruce: datosCruce.fechaCruce,
@@ -354,6 +526,18 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
       obtenerCicloActual,
       marcarAlertaLeida,
       isLoading,
+      estadoNube,
+      pendientes,
+      conflictos,
+      sincronizarAhora,
+      correoNube,
+      sesionComprobada,
+      granjasCargadas,
+      granjasNube,
+      granjaNubeId,
+      elegirGranjaNube,
+      entrarNube,
+      salirNube,
     }}>
       {children}
     </GranjaContext.Provider>

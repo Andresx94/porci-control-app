@@ -11,15 +11,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Trash2, Download, Upload, Info } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Trash2, Download, Upload, Info, Cloud } from 'lucide-react';
+import { hayNube } from '@/lib/supabase';
+import type { EstadoNube } from '@/contexts/GranjaContext';
 import { toast } from 'sonner';
 import { hoyISO } from '@/lib/fechas';
 import { borrarDatos, esDemo, importarDatos } from '@/lib/datos';
 
+const TEXTO_ESTADO: Record<EstadoNube, string> = {
+  apagada: 'Apagada',
+  sin_sesion: 'Sin sesión',
+  sincronizando: 'Sincronizando…',
+  al_dia: 'Al día',
+  sin_conexion: 'Sin conexión',
+  error: 'Error al sincronizar',
+};
+
 const AjustesPage = () => {
-  const { madres, ciclos } = useGranja();
+  const {
+    madres, ciclos, estadoNube, pendientes, conflictos, sincronizarAhora,
+    correoNube, granjasNube, granjaNubeId, elegirGranjaNube, salirNube,
+  } = useGranja();
   const [showResetDialog, setShowResetDialog] = useState(false);
   const demo = esDemo();
+  const mostrarNube = !demo && hayNube();
 
   const handleExportData = () => {
     const data = {
@@ -110,11 +127,98 @@ const AjustesPage = () => {
 
         {!demo && (
           <Button variant="outline" className="w-full h-12" asChild>
-            <a href={window.location.pathname}>
+            <a href={import.meta.env.BASE_URL + '?demo=1'}>
               Ver demo con datos de ejemplo
             </a>
           </Button>
         )}
+
+        {/* Nube: solo en modo real y con configuración */}
+        {mostrarNube && <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cloud className="h-5 w-5" />
+              Nube
+            </CardTitle>
+            <CardDescription>
+              Respalda y comparte los datos de la granja
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!correoNube ? (
+              <p className="text-sm text-muted-foreground">Sin sesión.</p>
+            ) : (
+              <>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">Correo</span>
+                    <span className="truncate">{correoNube}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Estado</span>
+                    <span>{TEXTO_ESTADO[estadoNube]}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Pendientes de subir</span>
+                    <span>{pendientes}</span>
+                  </div>
+                </div>
+
+                {granjasNube.length > 1 && (
+                  <div className="space-y-1">
+                    <Label>Granja</Label>
+                    <Select value={granjaNubeId ?? undefined} onValueChange={elegirGranjaNube}>
+                      <SelectTrigger className="h-12">
+                        <SelectValue placeholder="Elige una granja" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {granjasNube.map(g => (
+                          <SelectItem key={g.id} value={g.id}>{g.nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {granjasNube.length === 1 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Granja</span>
+                    <span className="truncate">{granjasNube[0].nombre}</span>
+                  </div>
+                )}
+                {!granjaNubeId && (
+                  <p className="text-sm text-muted-foreground">Elige una granja para sincronizar.</p>
+                )}
+
+                {conflictos.length > 0 && (
+                  <div className="rounded-md border border-destructive/50 p-3 space-y-1">
+                    <p className="text-sm font-medium text-destructive">
+                      {conflictos.length} {conflictos.length === 1 ? 'registro no se pudo subir' : 'registros no se pudieron subir'}
+                    </p>
+                    <ul className="space-y-1 text-xs text-muted-foreground">
+                      {conflictos.map(c => (
+                        <li key={`${c.tabla}-${c.id}`} className="break-words">
+                          {c.tabla === 'madres' ? 'Madre' : 'Ciclo'}: {c.error}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <Button
+                  variant="outline"
+                  className="w-full h-12"
+                  onClick={() => sincronizarAhora()}
+                  disabled={estadoNube === 'sincronizando' || !granjaNubeId}
+                >
+                  Sincronizar ahora
+                </Button>
+                <Button variant="outline" className="w-full h-12" onClick={() => salirNube()}>
+                  Cerrar sesión
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>}
 
         {/* Backup */}
         {!demo && <Card>

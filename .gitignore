@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Variables de entorno (la clave secreta nunca va en el repo)
+.env
+.env.*
+!.env.example

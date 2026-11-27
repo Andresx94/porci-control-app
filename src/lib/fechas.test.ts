@@ -6,7 +6,7 @@ import { borrarDatos, cargarDatos, CLAVES, guardarLista, migrarDatos } from '@/l
 import { crearDatosDemo, VERSION_DEMO } from '@/lib/demo';
 import { siguienteCiclo } from '@/lib/ciclos';
 
-const usarDemo = (activa: boolean) => window.history.replaceState(null, '', activa ? '/' : '/?real=1');
+const usarDemo = (activa: boolean) => window.history.replaceState(null, '', activa ? '/?demo=1' : '/?real=1');
 
 describe(`fechas en ${process.env.TZ ?? 'zona del sistema'}`, () => {
   beforeEach(() => {
