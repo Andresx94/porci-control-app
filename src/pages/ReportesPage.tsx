@@ -71,7 +71,7 @@ const ReportesPage = () => {
 
   return (
     <PageLayout title="Reportes">
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 max-w-3xl mx-auto">
         <Button size="lg" className="w-full h-14" onClick={() => navigate('/reportes/fechas')}>
           <CalendarSearch className="h-5 w-5 mr-2" />
           Buscar por fechas y exportar

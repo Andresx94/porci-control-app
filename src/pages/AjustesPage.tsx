@@ -17,8 +17,10 @@ import { Trash2, Download, Upload, Info, Cloud } from 'lucide-react';
 import { hayNube } from '@/lib/supabase';
 import type { EstadoNube } from '@/contexts/GranjaContext';
 import { toast } from 'sonner';
-import { hoyISO } from '@/lib/fechas';
-import { borrarDatos, esDemo, importarDatos } from '@/lib/datos';
+import { armarCopia, borrarDatos, esDemo, importarDatos, nombreArchivoCopia } from '@/lib/datos';
+import { puede } from '@/lib/permisos';
+import { formatFecha } from '@/lib/fechas';
+import { TrabajadoresCard } from '@/components/TrabajadoresCard';
 
 const TEXTO_ESTADO: Record<EstadoNube, string> = {
   apagada: 'Apagada',
@@ -33,30 +35,28 @@ const AjustesPage = () => {
   const {
     madres, ciclos, estadoNube, pendientes, conflictos, sincronizarAhora,
     correoNube, granjasNube, granjaNubeId, elegirGranjaNube, salirNube,
+    rolNube, venceNube, sesionAnonima,
   } = useGranja();
   const [showResetDialog, setShowResetDialog] = useState(false);
   const demo = esDemo();
   const mostrarNube = !demo && hayNube();
+  const esTrabajador = rolNube === 'operario';
+  const granjaActual = granjasNube.find(g => g.id === granjaNubeId);
 
   const handleExportData = () => {
-    const data = {
-      madres,
-      ciclos,
-      exportDate: new Date().toISOString(),
-      version: '2.0',
-    };
+    const data = armarCopia(madres, ciclos, granjaActual?.nombre);
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `porcicontrol-backup-${hoyISO()}.json`;
+    a.download = nombreArchivoCopia();
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    toast.success('Datos exportados correctamente');
+    toast.success('Copia descargada');
   };
 
   const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,9 +91,9 @@ const AjustesPage = () => {
 
   return (
     <PageLayout title="Ajustes">
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 max-w-3xl mx-auto">
         {/* Info de la app */}
-        <Card>
+        {!esTrabajador && <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Info className="h-5 w-5" />
@@ -123,9 +123,9 @@ const AjustesPage = () => {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card>}
 
-        {!demo && (
+        {!demo && !esTrabajador && (
           <Button variant="outline" className="w-full h-12" asChild>
             <a href={import.meta.env.BASE_URL + '?demo=1'}>
               Ver demo con datos de ejemplo
@@ -150,10 +150,18 @@ const AjustesPage = () => {
             ) : (
               <>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">Correo</span>
-                    <span className="truncate">{correoNube}</span>
-                  </div>
+                  {!sesionAnonima && (
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Correo</span>
+                      <span className="truncate">{correoNube}</span>
+                    </div>
+                  )}
+                  {esTrabajador && (
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Acceso hasta</span>
+                      <span>{venceNube ? formatFecha(venceNube) : 'Sin vencimiento'}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Estado</span>
                     <span>{TEXTO_ESTADO[estadoNube]}</span>
@@ -164,7 +172,7 @@ const AjustesPage = () => {
                   </div>
                 </div>
 
-                {granjasNube.length > 1 && (
+                {granjasNube.length > 1 && !esTrabajador && (
                   <div className="space-y-1">
                     <Label>Granja</Label>
                     <Select value={granjaNubeId ?? undefined} onValueChange={elegirGranjaNube}>
@@ -179,10 +187,10 @@ const AjustesPage = () => {
                     </Select>
                   </div>
                 )}
-                {granjasNube.length === 1 && (
+                {(granjasNube.length === 1 || (esTrabajador && granjaActual)) && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Granja</span>
-                    <span className="truncate">{granjasNube[0].nombre}</span>
+                    <span className="truncate">{(granjaActual ?? granjasNube[0]).nombre}</span>
                   </div>
                 )}
                 {!granjaNubeId && (
@@ -213,19 +221,29 @@ const AjustesPage = () => {
                   Sincronizar ahora
                 </Button>
                 <Button variant="outline" className="w-full h-12" onClick={() => salirNube()}>
-                  Cerrar sesión
+                  {esTrabajador ? 'Salir' : 'Cerrar sesión'}
                 </Button>
+                {esTrabajador && (
+                  <p className="text-xs text-muted-foreground">
+                    Si sales, necesitarás un enlace nuevo del dueño para volver a entrar.
+                  </p>
+                )}
               </>
             )}
           </CardContent>
         </Card>}
 
+        {/* Trabajadores: solo el dueño, con nube */}
+        {mostrarNube && !!granjaNubeId && rolNube === 'dueno' && puede(rolNube, 'gestionarTrabajadores') && (
+          <TrabajadoresCard granjaId={granjaNubeId} />
+        )}
+
         {/* Backup */}
-        {!demo && <Card>
+        {!demo && !esTrabajador && <Card>
           <CardHeader>
             <CardTitle>Respaldo de Datos</CardTitle>
             <CardDescription>
-              Exporta o importa los datos de tu granja
+              Descarga una copia completa (madres y ciclos) o restaura una copia anterior
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -235,7 +253,7 @@ const AjustesPage = () => {
               onClick={handleExportData}
             >
               <Download className="h-5 w-5 mr-2" />
-              Exportar Datos
+              Descargar copia completa
             </Button>
             
             <div className="relative">
@@ -250,14 +268,14 @@ const AjustesPage = () => {
                 className="w-full h-12"
               >
                 <Upload className="h-5 w-5 mr-2" />
-                Importar Datos
+                Restaurar desde copia
               </Button>
             </div>
           </CardContent>
         </Card>}
 
         {/* Zona de peligro */}
-        {!demo && <Card className="border-destructive/50">
+        {!demo && !esTrabajador && <Card className="border-destructive/50">
           <CardHeader>
             <CardTitle className="text-destructive">Zona de Peligro</CardTitle>
             <CardDescription>

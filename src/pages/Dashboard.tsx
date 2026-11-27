@@ -3,13 +3,14 @@ import { PageLayout } from '@/components/PageLayout';
 import { StatCard } from '@/components/StatCard';
 import { AlertaCard } from '@/components/AlertaCard';
 import { useGranja } from '@/contexts/GranjaContext';
+import { puede } from '@/lib/permisos';
 import { Users, Baby, Heart, Clock, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { estadisticas, alertas, madres, isLoading } = useGranja();
+  const { estadisticas, alertas, madres, isLoading, rolNube } = useGranja();
 
   const alertasRecientes = alertas
     .filter(a => !a.leida)
@@ -20,7 +21,7 @@ const Dashboard = () => {
       <PageLayout title="PorciControl">
         <div className="p-4 space-y-4">
           <Skeleton className="h-24 w-full" />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
@@ -44,7 +45,7 @@ const Dashboard = () => {
         />
 
         {/* Grid de estadísticas */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
             icon={Baby}
             label="En Gestación"
@@ -94,7 +95,7 @@ const Dashboard = () => {
           </div>
           
           {alertasRecientes.length > 0 ? (
-            <div className="space-y-2">
+            <div className="grid gap-2 lg:grid-cols-2">
               {alertasRecientes.map(alerta => {
                 const madre = madres.find(m => m.id === alerta.madreId);
                 return (
@@ -115,7 +116,7 @@ const Dashboard = () => {
         </section>
 
         {/* Acceso rápido */}
-        <section>
+        {puede(rolNube, 'crearMadre') && <section>
           <h2 className="text-lg font-semibold text-foreground mb-3">Acciones Rápidas</h2>
           <div className="grid grid-cols-2 gap-3">
             <Button
@@ -142,7 +143,7 @@ const Dashboard = () => {
               Buscar por fechas y exportar
             </Button>
           </div>
-        </section>
+        </section>}
       </div>
     </PageLayout>
   );

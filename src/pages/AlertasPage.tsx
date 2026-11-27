@@ -26,7 +26,7 @@ const AlertasPage = () => {
 
   return (
     <PageLayout title="Alertas">
-      <div className="p-4 space-y-6">
+      <div className="p-4 space-y-6 md:px-6">
         {alertas.length === 0 ? (
           <EmptyState
             icon={<Bell className="h-8 w-8 text-muted-foreground" />}
@@ -47,7 +47,7 @@ const AlertasPage = () => {
                     Marcar leídas
                   </Button>
                 </div>
-                <div className="space-y-2">
+                <div className="grid gap-2 lg:grid-cols-2">
                   {alertasNoLeidas.map(alerta => {
                     const madre = madres.find(m => m.id === alerta.madreId);
                     return (
@@ -69,7 +69,7 @@ const AlertasPage = () => {
                 <h2 className="text-lg font-semibold text-foreground mb-3">
                   Leídas ({alertasLeidas.length})
                 </h2>
-                <div className="space-y-2">
+                <div className="grid gap-2 lg:grid-cols-2">
                   {alertasLeidas.map(alerta => {
                     const madre = madres.find(m => m.id === alerta.madreId);
                     return (

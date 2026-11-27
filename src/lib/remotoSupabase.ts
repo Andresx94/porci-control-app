@@ -1,6 +1,7 @@
 // Supabase como Remoto, más sesión y granjas. Solo se usa si hayNube().
 import { supabase } from '@/lib/supabase';
 import { ErrorRed, Fila, Remoto, ResultadoFila } from '@/lib/sincronizacion';
+import { accesoVigente } from '@/lib/invitaciones';
 import { TablaNube, guardarPreferencia, leerPreferencia } from '@/lib/datos';
 
 interface ErrorPostgrest {
@@ -83,16 +84,25 @@ export async function cerrarSesion(): Promise<void> {
 }
 
 // Lee la sesión guardada en el dispositivo (no necesita red).
-export async function usuarioActual(): Promise<{ id: string; email: string } | null> {
+export interface UsuarioNube {
+  id: string;
+  email: string;
+  // Los trabajadores entran con sesión anónima (sin correo).
+  anonimo: boolean;
+}
+
+export async function usuarioActual(): Promise<UsuarioNube | null> {
   const { data } = await cliente().auth.getSession();
   const u = data.session?.user;
-  return u ? { id: u.id, email: u.email ?? '' } : null;
+  return u ? { id: u.id, email: u.email ?? '', anonimo: !!u.is_anonymous } : null;
 }
 
 export interface GranjaUsuario {
   id: string;
   nombre: string;
   rol: string;
+  // Fin del acceso del trabajador (null = no vence).
+  venceEn: string | null;
 }
 
 export async function granjasDelUsuario(): Promise<GranjaUsuario[]> {
@@ -101,17 +111,18 @@ export async function granjasDelUsuario(): Promise<GranjaUsuario[]> {
   // RLS deja ver a todos los miembros de mis granjas; aquí solo interesan mis filas.
   const { data, error } = await cliente()
     .from('miembros')
-    .select('rol, granjas(id, nombre, borrado_en)')
+    .select('rol, vence_en, granjas(id, nombre, borrado_en)')
     .eq('usuario_id', usuario.id)
     .is('borrado_en', null);
   if (error) lanzar(error);
   const filas = (data ?? []) as unknown as {
     rol: string;
+    vence_en: string | null;
     granjas: { id: string; nombre: string; borrado_en: string | null } | null;
   }[];
   return filas
-    .filter(f => f.granjas && !f.granjas.borrado_en)
-    .map(f => ({ id: f.granjas!.id, nombre: f.granjas!.nombre, rol: f.rol }));
+    .filter(f => f.granjas && !f.granjas.borrado_en && accesoVigente(f.vence_en))
+    .map(f => ({ id: f.granjas!.id, nombre: f.granjas!.nombre, rol: f.rol, venceEn: f.vence_en }));
 }
 
 // ---------------------------------------------------------------- granja elegida

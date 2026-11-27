@@ -4,6 +4,7 @@ import { PageLayout } from '@/components/PageLayout';
 import { MadreCard } from '@/components/MadreCard';
 import { EmptyState } from '@/components/EmptyState';
 import { useGranja } from '@/contexts/GranjaContext';
+import { puede } from '@/lib/permisos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,7 +26,7 @@ const leerOrden = (): 'asc' | 'desc' => (leerPreferencia(ORDEN_KEY) === 'desc' ?
 
 const MadresPage = () => {
   const navigate = useNavigate();
-  const { madres, ciclos, obtenerCiclosMadre } = useGranja();
+  const { madres, ciclos, obtenerCiclosMadre, rolNube } = useGranja();
   const [searchParams, setSearchParams] = useSearchParams();
   const [busqueda, setBusqueda] = useState('');
   const [orden, setOrden] = useState<'asc' | 'desc'>(leerOrden);
@@ -82,9 +83,9 @@ const MadresPage = () => {
               className="pl-9"
             />
           </div>
-          <Button onClick={() => navigate('/madres/nueva')} size="icon">
+          {puede(rolNube, 'crearMadre') && <Button onClick={() => navigate('/madres/nueva')} size="icon" aria-label="Nueva madre">
             <Plus className="h-5 w-5" />
-          </Button>
+          </Button>}
         </div>
 
         {/* Filtros rápidos */}
@@ -123,7 +124,7 @@ const MadresPage = () => {
           
           <TabsContent value="activas" className="mt-4">
             {madresActivas.length > 0 ? (
-              <div className="space-y-2">
+              <div className="grid gap-2 lg:grid-cols-2">
                 {madresActivas.map(madre => (
                   <MadreCard
                     key={madre.id}
@@ -142,10 +143,12 @@ const MadresPage = () => {
                 title="Sin madres registradas"
                 description="Agrega tu primera madre para comenzar el control reproductivo"
                 action={
-                  <Button onClick={() => navigate('/madres/nueva')}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Agregar Madre
-                  </Button>
+                  puede(rolNube, 'crearMadre') && (
+                    <Button onClick={() => navigate('/madres/nueva')}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Agregar Madre
+                    </Button>
+                  )
                 }
               />
             )}
@@ -153,7 +156,7 @@ const MadresPage = () => {
           
           <TabsContent value="descartadas" className="mt-4">
             {madresDescartadas.length > 0 ? (
-              <div className="space-y-2">
+              <div className="grid gap-2 lg:grid-cols-2">
                 {madresDescartadas.map(madre => (
                   <MadreCard
                     key={madre.id}

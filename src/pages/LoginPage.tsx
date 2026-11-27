@@ -3,9 +3,10 @@ import { useGranja } from '@/contexts/GranjaContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AvisoInstalar } from '@/components/AvisoInstalar';
 
 const LoginPage = () => {
-  const { sesionComprobada, correoNube, entrarNube, salirNube } = useGranja();
+  const { sesionComprobada, haySesion, sesionAnonima, entrarNube, salirNube } = useGranja();
   const [correo, setCorreo] = useState('');
   const [clave, setClave] = useState('');
   const [error, setError] = useState('');
@@ -35,7 +36,14 @@ const LoginPage = () => {
 
         {!sesionComprobada ? (
           <p className="text-center text-sm text-muted-foreground" role="status">Comprobando sesión…</p>
-        ) : correoNube ? (
+        ) : haySesion && sesionAnonima ? (
+          <div className="space-y-4 text-center">
+            <p className="text-sm">Tu acceso venció o fue retirado. Pide un enlace nuevo al dueño.</p>
+            <Button variant="outline" className="w-full h-12" onClick={() => salirNube()}>
+              Salir
+            </Button>
+          </div>
+        ) : haySesion ? (
           <div className="space-y-4 text-center">
             <p className="text-sm">Tu usuario no tiene granja asignada; pide acceso al dueño.</p>
             <Button variant="outline" className="w-full h-12" onClick={() => salirNube()}>
@@ -63,6 +71,8 @@ const LoginPage = () => {
             </Button>
           </form>
         )}
+
+        <AvisoInstalar />
       </div>
     </div>
   );

@@ -261,6 +261,25 @@ export function guardarLista(nombre: string, lista: unknown[]) {
   }
 }
 
+export const VERSION_COPIA = '2.0';
+
+// Copia completa: misma forma que acepta importarDatos ({madres, ciclos}) más metadatos.
+export function armarCopia(madres: Madre[], ciclos: Ciclo[], granja?: string | null) {
+  return {
+    formato: 'porcicontrol-copia',
+    version: VERSION_COPIA,
+    fechaCopia: hoyISO(),
+    exportDate: new Date().toISOString(),
+    ...(granja ? { granja } : {}),
+    madres,
+    ciclos,
+  };
+}
+
+export function nombreArchivoCopia(): string {
+  return `porcicontrol-copia-${hoyISO()}.json`;
+}
+
 export function importarDatos(datos: { madres: Madre[]; ciclos: Ciclo[] }) {
   const migrados = migrarDatos({ madres: datos.madres, ciclos: datos.ciclos, alertas: [] });
   // guardarLista encola lo importado para la nube (solo en modo real).

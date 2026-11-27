@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Users, Bell, BarChart3, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { puede } from '@/lib/permisos';
 import { useGranja } from '@/contexts/GranjaContext';
 
 const navItems = [
@@ -13,14 +14,14 @@ const navItems = [
 
 export function BottomNav() {
   const location = useLocation();
-  const { alertas } = useGranja();
+  const { alertas, rolNube } = useGranja();
   
   const alertasNoLeidas = alertas.filter(a => !a.leida).length;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border safe-bottom print:hidden">
-      <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
-        {navItems.map(({ to, icon: Icon, label }) => {
+      <div className="flex items-center justify-around h-16 max-w-lg md:max-w-2xl mx-auto">
+        {navItems.filter(i => i.to !== '/reportes' || puede(rolNube, 'verReportes')).map(({ to, icon: Icon, label }) => {
           const isActive = location.pathname === to || 
             (to !== '/' && location.pathname.startsWith(to));
           const isAlertTab = to === '/alertas';

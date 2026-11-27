@@ -4,6 +4,7 @@ import { PageLayout } from '@/components/PageLayout';
 import { CicloCard } from '@/components/CicloCard';
 import { EmptyState } from '@/components/EmptyState';
 import { useGranja } from '@/contexts/GranjaContext';
+import { puede } from '@/lib/permisos';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,7 +34,7 @@ const estadoLabels: Record<Madre['estado'], string> = {
 const DetalleMadrePage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { obtenerMadre, obtenerCiclosMadre, obtenerCicloActual, descartarMadre } = useGranja();
+  const { obtenerMadre, obtenerCiclosMadre, obtenerCicloActual, descartarMadre, rolNube } = useGranja();
   
   const [showDescarteDialog, setShowDescarteDialog] = useState(false);
   const [motivoDescarte, setMotivoDescarte] = useState('');
@@ -76,7 +77,7 @@ const DetalleMadrePage = () => {
 
   return (
     <PageLayout>
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 max-w-3xl mx-auto">
         <Button
           variant="ghost"
           size="sm"
@@ -151,7 +152,7 @@ const DetalleMadrePage = () => {
                 Continuar Ciclo
               </Button>
             )}
-            <Button
+            {puede(rolNube, 'descartarMadre') && <Button
               size="lg"
               variant="outline"
               className="h-14 text-destructive border-destructive/50"
@@ -159,7 +160,7 @@ const DetalleMadrePage = () => {
             >
               <Trash2 className="h-5 w-5 mr-2" />
               Descartar
-            </Button>
+            </Button>}
           </div>
         )}
 

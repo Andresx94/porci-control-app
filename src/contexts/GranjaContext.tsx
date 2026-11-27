@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Madre, Ciclo, Alerta, EstadisticasDashboard, EstadoMadre, DatosCruce, DatosParto, DatosDestete, DatosFallo } from '@/types';
 import { ordenarCiclos, siguienteCiclo } from '@/lib/ciclos';
-import { calcularFechasCiclo, diasEntre, esProximaAParir, hoyISO, sumarDias } from '@/lib/fechas';
-import { cargarDatos, CLAVES, contarPendientes, Conflicto, esDemo, guardarLista, leerConflictos } from '@/lib/datos';
+import { calcularFechasCiclo, esProximaAParir, hoyISO } from '@/lib/fechas';
+import { alertasIguales, calcularAlertas } from '@/lib/alertas';
+import { cargarDatos, CLAVES, contarPendientes, Conflicto, esDemo, guardarLista, guardarPreferencia, leerConflictos, leerPreferencia } from '@/lib/datos';
+import { toast } from 'sonner';
+import { Accion, cicloVacioPara, puede, RolNube } from '@/lib/permisos';
 import { generarUuid } from '@/lib/utils';
 import { hayNube, supabase } from '@/lib/supabase';
 import { ErrorRed, sincronizar } from '@/lib/sincronizacion';
@@ -16,9 +19,27 @@ import {
   remotoSupabase,
   resolverGranja,
   usuarioActual,
+  UsuarioNube,
 } from '@/lib/remotoSupabase';
 
 export type EstadoNube = 'apagada' | 'sin_sesion' | 'sincronizando' | 'al_dia' | 'sin_conexion' | 'error';
+
+const PREF_ROL = 'rol_nube';
+
+interface RolGuardado {
+  granja: string;
+  rol: string;
+  venceEn: string | null;
+}
+
+function leerRolGuardado(): RolGuardado | null {
+  try {
+    const v = JSON.parse(leerPreferencia(PREF_ROL) || 'null');
+    return v && typeof v.granja === 'string' && typeof v.rol === 'string' ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 const INTERVALO_SYNC_MS = 60_000;
 const ESPERA_SYNC_MS = 3_000;
@@ -58,6 +79,13 @@ interface GranjaContextType {
   conflictos: Conflicto[];
   sincronizarAhora: () => Promise<void>;
   correoNube: string | null;
+  // Sesion de nube activa (el trabajador entra sin correo, con sesion anonima)
+  haySesion: boolean;
+  sesionAnonima: boolean;
+  // Rol en la granja actual: null en demo, sin nube o sin dato (todo permitido en la interfaz)
+  rolNube: RolNube;
+  // Fin del acceso del trabajador en la granja actual (null = no vence)
+  venceNube: string | null;
   // false mientras se lee la sesion guardada al arrancar (evita el parpadeo del login)
   sesionComprobada: boolean;
   // true cuando la lista de granjas se leyo bien (puede estar vacia)
@@ -70,10 +98,6 @@ interface GranjaContextType {
 }
 
 const GranjaContext = createContext<GranjaContextType | undefined>(undefined);
-
-function generarId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-}
 
 export function GranjaProvider({ children }: { children: React.ReactNode }) {
   const [madres, setMadres] = useState<Madre[]>([]);
@@ -108,88 +132,25 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     if (!isLoading) guardarLista(CLAVES.ALERTAS, alertas);
   }, [alertas, isLoading]);
 
-  // Generar alertas automáticamente
+  // Alertas: se recalculan desde madres y ciclos (solo locales, no marcan cambios)
+  const diaAlertas = useRef('');
   useEffect(() => {
     if (isLoading) return;
-    
-    const nuevasAlertas: Alerta[] = [];
-    const hoy = hoyISO();
-    const enUnaSemana = sumarDias(hoy, 7);
-
-    ciclos.forEach(ciclo => {
-      if (ciclo.estadoCiclo === 'gestacion' && ciclo.fechaPartoPrevista) {
-        const fechaParto = ciclo.fechaPartoPrevista;
-        if (fechaParto <= enUnaSemana && fechaParto >= hoy) {
-          const madre = madres.find(m => m.id === ciclo.madreId);
-          if (madre) {
-            const existe = alertas.some(a => a.tipo === 'parto_proximo' && a.madreId === ciclo.madreId);
-            if (!existe) {
-              nuevasAlertas.push({
-                id: generarId(),
-                tipo: 'parto_proximo',
-                madreId: ciclo.madreId,
-                mensaje: `${madre.arete} próxima a parir`,
-                fechaAlerta: ciclo.fechaPartoPrevista,
-                prioridad: 'alta',
-                leida: false,
-              });
-            }
-          }
-        }
-      }
-
-      if (ciclo.estadoCiclo === 'lactancia' && ciclo.fechaDestetePrevista) {
-        const fechaDestetePrevista = ciclo.fechaDestetePrevista;
-        if (fechaDestetePrevista <= enUnaSemana && fechaDestetePrevista >= hoy) {
-          const madre = madres.find(m => m.id === ciclo.madreId);
-          if (madre) {
-            const existe = alertas.some(a => a.tipo === 'destete_pendiente' && a.madreId === ciclo.madreId);
-            if (!existe) {
-              nuevasAlertas.push({
-                id: generarId(),
-                tipo: 'destete_pendiente',
-                madreId: ciclo.madreId,
-                mensaje: `${madre.arete} lista para destete`,
-                fechaAlerta: fechaDestetePrevista,
-                prioridad: 'media',
-                leida: false,
-              });
-            }
-          }
-        }
-      }
-    });
-
-    // Madres vacías listas para cruce (más de 7 días desde destete)
-    madres.forEach(madre => {
-      if (madre.estado === 'vacia') {
-        const ultimoCiclo = ciclos
-          .filter(c => c.madreId === madre.id && c.estadoCiclo === 'finalizado')
-          .sort((a, b) => (b.fechaDestete || '').localeCompare(a.fechaDestete || ''))[0];
-        
-        if (ultimoCiclo?.fechaDestete) {
-          const diasDesdeDestete = diasEntre(ultimoCiclo.fechaDestete, hoy);
-          if (diasDesdeDestete >= 7) {
-            const existe = alertas.some(a => a.tipo === 'lista_cruce' && a.madreId === madre.id);
-            if (!existe) {
-              nuevasAlertas.push({
-                id: generarId(),
-                tipo: 'lista_cruce',
-                madreId: madre.id,
-                mensaje: `${madre.arete} lista para nuevo cruce`,
-                fechaAlerta: hoy,
-                prioridad: 'baja',
-                leida: false,
-              });
-            }
-          }
-        }
-      }
-    });
-
-    if (nuevasAlertas.length > 0) {
-      setAlertas(prev => [...prev, ...nuevasAlertas]);
-    }
+    const recalcular = () => {
+      const hoy = hoyISO();
+      diaAlertas.current = hoy;
+      setAlertas(prev => {
+        const nuevas = calcularAlertas(madres, ciclos, prev, hoy);
+        return alertasIguales(prev, nuevas) ? prev : nuevas;
+      });
+    };
+    recalcular();
+    // Al volver a la pestaña, recalcular solo si cambió el día.
+    const alVolver = () => {
+      if (document.visibilityState === 'visible' && hoyISO() !== diaAlertas.current) recalcular();
+    };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => document.removeEventListener('visibilitychange', alVolver);
   }, [madres, ciclos, isLoading]);
 
   // ---------------------------------------------------------------- nube
@@ -197,11 +158,15 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
   const [estadoNube, setEstadoNube] = useState<EstadoNube>(nubeActiva ? 'sin_sesion' : 'apagada');
   const [pendientes, setPendientes] = useState(0);
   const [conflictos, setConflictos] = useState<Conflicto[]>([]);
-  const [correoNube, setCorreoNube] = useState<string | null>(null);
+  const [sesionNube, setSesionNube] = useState<UsuarioNube | null>(null);
+  const haySesion = sesionNube !== null;
+  const correoNube = sesionNube?.email || null;
   const [sesionComprobada, setSesionComprobada] = useState(!nubeActiva);
   const [granjasCargadas, setGranjasCargadas] = useState(false);
   const [granjasNube, setGranjasNube] = useState<GranjaUsuario[]>([]);
   const [granjaNubeId, setGranjaNubeId] = useState<string | null>(() => (nubeActiva ? granjaElegida() : null));
+  // Rol y fin de acceso recordados en el dispositivo, para saberlos también sin señal.
+  const [rolGuardado, setRolGuardado] = useState<RolGuardado | null>(() => (nubeActiva ? leerRolGuardado() : null));
   const granjaRef = useRef<string | null>(null);
   const sesionRef = useRef(false);
   const corriendo = useRef(false);
@@ -240,11 +205,15 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     if (!nubeActiva || !supabase) return;
     let vivo = true;
     usuarioActual()
-      .then(u => vivo && setCorreoNube(u ? u.email : null))
+      .then(u => vivo && setSesionNube(u))
       .catch(() => {})
       .finally(() => vivo && setSesionComprobada(true));
     const { data } = supabase.auth.onAuthStateChange((_evento, sesion) => {
-      setCorreoNube(sesion?.user?.email ?? null);
+      const u = sesion?.user;
+      // Misma sesión (p. ej. refresco de token): conservar el objeto evita recargas.
+      setSesionNube(prev =>
+        !u ? null : prev && prev.id === u.id ? prev : { id: u.id, email: u.email ?? '', anonimo: !!u.is_anonymous }
+      );
       setSesionComprobada(true);
     });
     return () => {
@@ -255,9 +224,9 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
 
   // Granjas del usuario (si no hay red se conserva la granja elegida antes)
   useEffect(() => {
-    sesionRef.current = correoNube !== null;
+    sesionRef.current = haySesion;
     if (!nubeActiva) return;
-    if (correoNube === null) {
+    if (!haySesion) {
       setGranjasNube([]);
       setGranjasCargadas(false);
       setEstadoNube('sin_sesion');
@@ -273,13 +242,18 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
         if (id) {
           elegirGranjaGuardada(id);
           setGranjaNubeId(id);
+          const g = lista.find(x => x.id === id);
+          if (g) {
+            guardarPreferencia(PREF_ROL, JSON.stringify({ granja: id, rol: g.rol, venceEn: g.venceEn }));
+            setRolGuardado({ granja: id, rol: g.rol, venceEn: g.venceEn });
+          }
         }
       })
       .catch(error => console.error('Error leyendo granjas:', error));
     return () => {
       vivo = false;
     };
-  }, [nubeActiva, correoNube]);
+  }, [nubeActiva, haySesion, sesionNube?.id]);
 
   useEffect(() => {
     granjaRef.current = granjaNubeId;
@@ -287,7 +261,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
 
   // Al cargar, al volver la señal y cada minuto
   useEffect(() => {
-    if (!nubeActiva || isLoading || !correoNube || !granjaNubeId) return;
+    if (!nubeActiva || isLoading || !haySesion || !granjaNubeId) return;
     granjaRef.current = granjaNubeId;
     sesionRef.current = true;
     sincronizarAhora();
@@ -300,18 +274,18 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('online', alVolver);
       window.clearInterval(timer);
     };
-  }, [nubeActiva, isLoading, correoNube, granjaNubeId, sincronizarAhora]);
+  }, [nubeActiva, isLoading, haySesion, granjaNubeId, sincronizarAhora]);
 
   // 3 s después de cualquier cambio local
   useEffect(() => {
     if (!nubeActiva || isLoading) return;
     refrescarCola();
-    if (!correoNube || !granjaNubeId) return;
+    if (!haySesion || !granjaNubeId) return;
     const timer = window.setTimeout(() => {
       if (contarPendientes() > 0) sincronizarAhora();
     }, ESPERA_SYNC_MS);
     return () => window.clearTimeout(timer);
-  }, [madres, ciclos, nubeActiva, isLoading, correoNube, granjaNubeId, sincronizarAhora, refrescarCola]);
+  }, [madres, ciclos, nubeActiva, isLoading, haySesion, granjaNubeId, sincronizarAhora, refrescarCola]);
 
   const elegirGranjaNube = useCallback((id: string) => {
     elegirGranjaGuardada(id);
@@ -324,10 +298,39 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
 
   const salirNube = useCallback(async () => {
     await cerrarSesion();
-    setCorreoNube(null);
+    setSesionNube(null);
+    guardarPreferencia(PREF_ROL, '');
     // Vuelve a la URL base sin parametros: login (modo real con nube)
     window.location.replace(import.meta.env.BASE_URL);
   }, []);
+
+  // Rol en la granja actual (sin dato y con sesión anónima: trabajador, por seguridad)
+  const granjaActual = granjasNube.find(g => g.id === granjaNubeId);
+  const infoRol = granjaActual ?? (rolGuardado && rolGuardado.granja === granjaNubeId ? rolGuardado : null);
+  const rolNube: RolNube = !nubeActiva
+    ? null
+    : infoRol
+      ? infoRol.rol === 'operario' ? 'operario' : 'dueno'
+      : sesionNube?.anonimo ? 'operario' : null;
+  const venceNube = infoRol?.venceEn ?? null;
+
+  // Guarda de acciones: el trabajador no puede ejecutar lo prohibido aunque alguien lo llame.
+  const rolRef = useRef<RolNube>(null);
+  rolRef.current = rolNube;
+  const denegar = useCallback((accion: Accion): boolean => {
+    if (puede(rolRef.current, accion)) return false;
+    toast.error('Tu acceso de trabajador no permite esta acción');
+    return true;
+  }, []);
+  // El trabajador solo registra parto, destete o fallo cuando esos datos están vacíos.
+  const denegarCiclo = useCallback((accion: 'registrarParto' | 'registrarDestete' | 'registrarFallo', ciclo: Ciclo | undefined): boolean => {
+    if (denegar(accion)) return true;
+    if (rolRef.current === 'operario' && ciclo && !cicloVacioPara(accion, ciclo)) {
+      toast.error('Ese dato ya está registrado y el trabajador no puede cambiarlo');
+      return true;
+    }
+    return false;
+  }, [denegar]);
 
   // Calcular estadísticas
   const estadisticas: EstadisticasDashboard = React.useMemo(() => {
@@ -352,6 +355,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
 
   // Acciones Madres
   const agregarMadre = useCallback((datos: Omit<Madre, 'id' | 'fechaRegistro'>): Madre => {
+    if (denegar('crearMadre')) return { ...datos, id: '', fechaRegistro: hoyISO() };
     const nuevaMadre: Madre = {
       ...datos,
       id: generarUuid(),
@@ -360,13 +364,21 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     };
     setMadres(prev => [...prev, nuevaMadre]);
     return nuevaMadre;
+  }, [denegar]);
+
+  // Interno: cambia solo el estado de la madre al crear cruce o registrar parto, destete o fallo
+  // (es lo único que el trabajador puede cambiar de una madre).
+  const cambiarEstadoMadre = useCallback((id: string, estado: EstadoMadre) => {
+    setMadres(prev => prev.map(m => m.id === id ? { ...m, estado } : m));
   }, []);
 
   const actualizarMadre = useCallback((id: string, datos: Partial<Madre>) => {
+    if (denegar('editarMadre')) return;
     setMadres(prev => prev.map(m => m.id === id ? { ...m, ...datos } : m));
-  }, []);
+  }, [denegar]);
 
   const descartarMadre = useCallback((id: string, motivo: string) => {
+    if (denegar('descartarMadre')) return;
     setMadres(prev => prev.map(m => m.id === id ? {
       ...m,
       estado: 'descartada' as EstadoMadre,
@@ -374,7 +386,7 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
       descartadoEn: new Date().toISOString(),
       motivoDescarte: motivo,
     } : m));
-  }, []);
+  }, [denegar]);
 
   const obtenerMadre = useCallback((id: string) => {
     return madres.find(m => m.id === id);
@@ -401,12 +413,13 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
     };
     
     setCiclos(prev => [...prev, nuevoCiclo]);
-    actualizarMadre(madreId, { estado: 'gestacion' });
+    cambiarEstadoMadre(madreId, 'gestacion');
     
     return nuevoCiclo;
-  }, [ciclos, actualizarMadre]);
+  }, [ciclos, cambiarEstadoMadre]);
 
   const editarCruce = useCallback((cicloId: string, datosCruce: DatosCruce) => {
+    if (denegar('editarCruce')) return;
     const ciclo = ciclos.find(c => c.id === cicloId);
     if (!ciclo) return;
 
@@ -420,18 +433,11 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
       ...calcularFechasCiclo(datosCruce.fechaCruce),
       fechaActualizacion: new Date().toISOString(),
     }));
-
-    // Las alertas de fechas anteriores ya no valen; se regeneran con las nuevas.
-    if (ciclo.fechaCruce !== datosCruce.fechaCruce) {
-      setAlertas(prev => prev.filter(a =>
-        a.madreId !== ciclo.madreId || (a.tipo !== 'parto_proximo' && a.tipo !== 'destete_pendiente')
-      ));
-    }
-  }, [ciclos]);
+  }, [ciclos, denegar]);
 
   const marcarFallido = useCallback((cicloId: string, datos: DatosFallo) => {
     const ciclo = ciclos.find(c => c.id === cicloId);
-    if (!ciclo) return;
+    if (!ciclo || denegarCiclo('registrarFallo', ciclo)) return;
 
     setCiclos(prev => prev.map(c => c.id !== cicloId ? c : {
       ...c,
@@ -441,15 +447,15 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
       estadoCiclo: 'fallido',
       fechaActualizacion: new Date().toISOString(),
     }));
-    setAlertas(prev => prev.filter(a => a.madreId !== ciclo.madreId || a.tipo !== 'parto_proximo'));
-    actualizarMadre(ciclo.madreId, { estado: 'vacia' });
-  }, [ciclos, actualizarMadre]);
+    cambiarEstadoMadre(ciclo.madreId, 'vacia');
+  }, [ciclos, cambiarEstadoMadre, denegarCiclo]);
 
   const proximoCiclo = useCallback((madreId: string) => {
     return siguienteCiclo(ciclos.filter(c => c.madreId === madreId));
   }, [ciclos]);
 
   const registrarParto = useCallback((cicloId: string, datosParto: DatosParto) => {
+    if (denegarCiclo('registrarParto', ciclos.find(c => c.id === cicloId))) return;
     setCiclos(prev => prev.map(c => {
       if (c.id !== cicloId) return c;
       return {
@@ -467,11 +473,12 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
 
     const ciclo = ciclos.find(c => c.id === cicloId);
     if (ciclo) {
-      actualizarMadre(ciclo.madreId, { estado: 'lactancia' });
+      cambiarEstadoMadre(ciclo.madreId, 'lactancia');
     }
-  }, [ciclos, actualizarMadre]);
+  }, [ciclos, cambiarEstadoMadre, denegarCiclo]);
 
   const registrarDestete = useCallback((cicloId: string, datosDestete: DatosDestete) => {
+    if (denegarCiclo('registrarDestete', ciclos.find(c => c.id === cicloId))) return;
     setCiclos(prev => prev.map(c => {
       if (c.id !== cicloId) return c;
       return {
@@ -489,9 +496,9 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
 
     const ciclo = ciclos.find(c => c.id === cicloId);
     if (ciclo) {
-      actualizarMadre(ciclo.madreId, { estado: 'vacia' });
+      cambiarEstadoMadre(ciclo.madreId, 'vacia');
     }
-  }, [ciclos, actualizarMadre]);
+  }, [ciclos, cambiarEstadoMadre, denegarCiclo]);
 
   const obtenerCiclosMadre = useCallback((madreId: string) => {
     return ordenarCiclos(ciclos.filter(c => c.madreId === madreId));
@@ -531,6 +538,10 @@ export function GranjaProvider({ children }: { children: React.ReactNode }) {
       conflictos,
       sincronizarAhora,
       correoNube,
+      haySesion,
+      sesionAnonima: sesionNube?.anonimo ?? false,
+      rolNube,
+      venceNube,
       sesionComprobada,
       granjasCargadas,
       granjasNube,

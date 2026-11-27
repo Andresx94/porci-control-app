@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PageLayout } from '@/components/PageLayout';
 import { useGranja } from '@/contexts/GranjaContext';
+import { puede } from '@/lib/permisos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,7 +42,7 @@ const Observaciones = ({ texto }: { texto?: string }) => texto ? (
 const DetalleCicloPage = () => {
   const { id: madreId, cicloId } = useParams<{ id: string; cicloId: string }>();
   const navigate = useNavigate();
-  const { obtenerMadre, ciclos, editarCruce, marcarFallido, registrarParto, registrarDestete } = useGranja();
+  const { obtenerMadre, ciclos, editarCruce, marcarFallido, registrarParto, registrarDestete, rolNube } = useGranja();
   
   const madre = obtenerMadre(madreId!);
   const ciclo = ciclos.find(c => c.id === cicloId);
@@ -185,7 +186,7 @@ const DetalleCicloPage = () => {
 
   return (
     <PageLayout>
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 max-w-3xl mx-auto">
         <Button variant="ghost" size="sm" onClick={() => navigate(`/madres/${madreId}`)} className="mb-2">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Volver a {madre.arete}
@@ -208,10 +209,10 @@ const DetalleCicloPage = () => {
                   <Calendar className="h-4 w-4" />
                   Cruce
                 </div>
-                <Button variant="outline" size="sm" className="h-8" onClick={abrirEditarCruce}>
+                {puede(rolNube, 'editarCruce') && <Button variant="outline" size="sm" className="h-8" onClick={abrirEditarCruce}>
                   <Pencil className="h-3.5 w-3.5 mr-1.5" />
                   Editar
-                </Button>
+                </Button>}
               </div>
               <div className="text-sm text-muted-foreground grid grid-cols-2 gap-2">
                 <span>Fecha: {fmt(ciclo.fechaCruce)}</span>
