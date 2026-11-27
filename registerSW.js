@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/porci-control-app/sw.js', { scope: '/porci-control-app/' })})}
