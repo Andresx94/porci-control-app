@@ -78,8 +78,11 @@ const InvitacionPage = () => {
         )}
         {estado === 'dueno' && (
           <div className="space-y-4">
-            <p className="text-sm">Este dispositivo ya tiene sesión de dueño. Abre el enlace en el celular del trabajador.</p>
-            <Button className="w-full h-12" onClick={irAInicio}>Ir a la app</Button>
+            <p className="text-sm font-semibold">Este navegador tiene tu sesión de dueño, así que el enlace no se usó.</p>
+            <p className="text-sm text-muted-foreground">
+              Ábrelo en el celular del trabajador (o en otro navegador sin tu sesión). Si entras aquí, seguirás como dueño con todos los permisos.
+            </p>
+            <Button className="w-full h-12" onClick={irAInicio}>Seguir como dueño</Button>
           </div>
         )}
         {estado === 'error' && (

@@ -48,7 +48,10 @@ export function mensajeCanje(error: unknown): string {
   const m = error instanceof Error ? error.message : '';
   if (/no v[aá]lida|vencida/i.test(m)) return 'El enlace ya fue usado o venció. Pide uno nuevo al dueño';
   if (/ya es due[nñ]o/i.test(m)) return 'Este usuario ya es dueño de la granja';
-  if (/anonymous|anónim/i.test(m)) return 'El acceso por enlace no está activado. Avisa al dueño';
+  // Supabase bloquea el acceso anónimo si está apagado o si el registro de usuarios está cerrado.
+  if (/anonymous|anónim|signups? not allowed|signup_disabled/i.test(m)) {
+    return 'El acceso por enlace no está activado en el servidor. Avisa al dueño';
+  }
   if (/fetch|network|load failed/i.test(m) || (typeof navigator !== 'undefined' && !navigator.onLine)) {
     return 'Sin conexión. Intenta de nuevo con internet';
   }

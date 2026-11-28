@@ -17,7 +17,7 @@ import { Trash2, Download, Upload, Info, Cloud } from 'lucide-react';
 import { hayNube } from '@/lib/supabase';
 import type { EstadoNube } from '@/contexts/GranjaContext';
 import { toast } from 'sonner';
-import { armarCopia, borrarDatos, esDemo, importarDatos, nombreArchivoCopia } from '@/lib/datos';
+import { armarCopia, borrarDatos, esDemo, importarDatos, nombreArchivoCopia, reintentarConflictos } from '@/lib/datos';
 import { puede } from '@/lib/permisos';
 import { formatFecha } from '@/lib/fechas';
 import { TrabajadoresCard } from '@/components/TrabajadoresCard';
@@ -35,7 +35,7 @@ const AjustesPage = () => {
   const {
     madres, ciclos, estadoNube, pendientes, conflictos, sincronizarAhora,
     correoNube, granjasNube, granjaNubeId, elegirGranjaNube, salirNube,
-    rolNube, venceNube, sesionAnonima,
+    rolNube, venceNube, sesionAnonima, haySesion,
   } = useGranja();
   const [showResetDialog, setShowResetDialog] = useState(false);
   const demo = esDemo();
@@ -145,7 +145,7 @@ const AjustesPage = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {!correoNube ? (
+            {!haySesion ? (
               <p className="text-sm text-muted-foreground">Sin sesión.</p>
             ) : (
               <>
@@ -209,6 +209,18 @@ const AjustesPage = () => {
                         </li>
                       ))}
                     </ul>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-full"
+                      disabled={estadoNube === 'sincronizando'}
+                      onClick={() => {
+                        reintentarConflictos();
+                        sincronizarAhora();
+                      }}
+                    >
+                      Reintentar subir
+                    </Button>
                   </div>
                 )}
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Ciclo, Madre } from '@/types';
-import { CLAVES, contarPendientes, guardarLista, importarDatos, leerCola, leerConflictos, leerCursor, borrarDatos } from '@/lib/datos';
+import { CLAVES, contarPendientes, guardarLista, importarDatos, leerCola, leerConflictos, leerCursor, borrarDatos, reintentarConflictos } from '@/lib/datos';
 import {
   cicloANube,
   cicloDeNube,
@@ -227,6 +227,17 @@ describe('sincronizar', () => {
     await expect(sincronizar(remoto, 'otra-granja')).rejects.toThrow('otra granja');
     expect(contarPendientes()).toBe(1);
     expect(tablas.madres.get(M1)?.granja_id).toBe(G);
+  });
+
+  it('reintentar conflictos los vuelve a encolar y limpia la lista', async () => {
+    const { remoto, otroDispositivo } = crearRemoto();
+    otroDispositivo('madres', madreANube(madre(M2, 'A-1'), G));
+    guardarLista(CLAVES.MADRES, [madre(M1, 'A-1')]);
+    await sincronizar(remoto, G);
+    expect(leerConflictos()).toHaveLength(1);
+    expect(reintentarConflictos()).toBe(1);
+    expect(leerConflictos()).toHaveLength(0);
+    expect(leerCola().madres).toEqual([M1]);
   });
 
   it('importar en modo real encola todo', () => {

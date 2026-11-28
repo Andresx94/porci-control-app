@@ -207,6 +207,23 @@ export function agregarConflicto(conflicto: Conflicto) {
   }
 }
 
+// Vuelve a poner en la cola los registros que quedaron como conflicto y limpia la lista.
+export function reintentarConflictos(): number {
+  const conflictos = leerConflictos();
+  if (!conflictos.length) return 0;
+  const cola = leerCola();
+  conflictos.forEach(c => {
+    if (!cola[c.tabla].includes(c.id)) cola[c.tabla].push(c.id);
+  });
+  escribirCola(cola);
+  try {
+    localStorage.removeItem(CLAVE_CONFLICTOS);
+  } catch {
+    // sin almacenamiento: se reintenta igual con la cola en memoria del próximo guardado
+  }
+  return conflictos.length;
+}
+
 export function leerCursor(granjaId: string): CursorNube {
   return leerJSON<CursorNube>(PREFIJO_CURSOR + granjaId, {});
 }
